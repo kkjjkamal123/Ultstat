@@ -129,3 +129,16 @@ Thread.sleep(forTimeInterval: 1)
 procs.sample(tick: 0)
 for p in procs.topByCPU.prefix(5) { print(String(format: "  cpu   %-22@ %6.1f%%  %7.1f MB  %6.3f W", p.name as NSString, p.cpu * 100, Double(p.memory) / 1e6, p.watts)) }
 for p in procs.topByPower.prefix(3) { print(String(format: "  power %-22@ %6.3f W", p.name as NSString, p.watts)) }
+
+// MARK: IOReport energy
+if let er = ult_energy_open(true) {
+    var e = ult_energy_sample()
+    _ = ult_energy_read(er, &e)
+    Thread.sleep(forTimeInterval: 1)
+    if ult_energy_read(er, &e) {
+        let s = Double(e.nanos) / 1e9
+        print(String(format: "IOReport power: CPU %.0f mW  GPU %.0f mW  ANE %.0f mW  DRAM %.0f mW", e.cpu_mj / s, e.gpu_mj / s, e.ane_mj / s, e.dram_mj / s))
+    }
+    measure("IOReport energy sample", iterations: 200) { _ = ult_energy_read(er, &e) }
+    ult_energy_close(er)
+} else { print("IOReport unavailable") }

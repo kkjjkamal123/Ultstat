@@ -17,6 +17,10 @@ final class MonitorHub {
     let sensors: SensorSampler?
     let battery: BatteryMonitor?
     let processes: ProcessSampler
+    let energy: EnergySampler?
+    let fans: FanSampler?
+    private(set) var accessories: AccessorySampler
+    private let bus: ReadingsBus
     private let power: PowerSampler?
     private let smc: SMC?
 
@@ -26,7 +30,8 @@ final class MonitorHub {
     private var menuItems: Set<MenuBarItem> = []
     private var workspaceObservers: [NSObjectProtocol] = []
 
-    init(bus: ReadingsBus, interval: Int) {
+    init(bus: ReadingsBus, interval: Int, bluetoothAccessories: Bool) {
+        self.bus = bus
         scheduler = Scheduler(configuration: .init(interval: .seconds(interval), leewayFraction: 0.25))
         cpu = CPUSampler { v in bus.update { $0.cpu = v } }
         memory = MemorySampler { v in bus.update { $0.memory = v } }
@@ -40,11 +45,15 @@ final class MonitorHub {
             let catalog = SensorCatalog.load(smc: smc, cacheURL: cacheURL)
             sensors = SensorSampler(smc: smc, catalog: catalog) { v in bus.update { $0.sensors = v } }
             power = PowerSampler(smc: smc) { w in bus.update { $0.systemPower = w } }
+            fans = FanSampler(smc: smc) { v in bus.update { $0.fans = v } }
         } else {
             sensors = nil
             power = nil
+            fans = nil
         }
+        accessories = AccessorySampler(cadence: 15, includeBluetooth: bluetoothAccessories) { v in bus.update { $0.accessories = v } }
         processes = ProcessSampler { v in bus.update { $0.processes = v } }
+        energy = EnergySampler(privileged: false) { v in bus.update { $0.componentPower = v } }
         battery = BatteryMonitor { v in bus.update { $0.battery = v } }
         battery?.start()
         observeSystemState()
@@ -68,10 +77,24 @@ final class MonitorHub {
             detailTokens = MenuBarItem.allCases.flatMap { tokens(for: $0) }
             if let battery { detailTokens.append(scheduler.demand(battery)) }
             detailTokens.append(scheduler.demand(processes))
+            if let energy { detailTokens.append(scheduler.demand(energy)) }
+            if let fans { detailTokens.append(scheduler.demand(fans)) }
+            detailTokens.append(scheduler.demand(accessories))
         } else {
             detailTokens = []
         }
         updateSensorGroups()
+    }
+
+    /// Rebuilds the accessory sampler when the Bluetooth (earbuds) option changes.
+    func setBluetoothAccessories(_ on: Bool) {
+        guard on != accessories.includeBluetooth else { return }
+        let bus = self.bus
+        accessories = AccessorySampler(cadence: 15, includeBluetooth: on) { v in bus.update { $0.accessories = v } }
+        if detailVisible {
+            setDetailVisible(false)
+            setDetailVisible(true)
+        }
     }
 
     func setInterval(_ seconds: Int) {

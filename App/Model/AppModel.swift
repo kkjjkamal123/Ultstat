@@ -20,7 +20,7 @@ final class AppModel {
 
     init() {
         let bus = ReadingsBus { [weak self] r in self?.receive(r) }
-        hub = MonitorHub(bus: bus, interval: settings.stored.interval)
+        hub = MonitorHub(bus: bus, interval: settings.stored.interval, bluetoothAccessories: settings.stored.bluetoothAccessories)
         applySettings()
         helperState = helper.state
         observeSettings()
@@ -49,6 +49,7 @@ final class AppModel {
     private func applySettings() {
         let s = settings.stored
         hub.setMenuItems(Set(s.items))
+        hub.setBluetoothAccessories(s.bluetoothAccessories)
         if appliedInterval != s.interval {
             hub.setInterval(s.interval)
             appliedInterval = s.interval

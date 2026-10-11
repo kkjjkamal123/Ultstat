@@ -77,3 +77,10 @@ Writable bit: `attributes & 0x40`.
 
 One SMC read is 100–175 µs (a coprocessor round trip). IOHID thermal reads are ~757 µs each.
 Charge control is event-driven (IOKit power-source notifications), not polled.
+
+## Component power (IOReport "Energy Model")
+
+On macOS 27 (M5) the mJ channels — `CPU Energy`, `ANE`, `DRAM` and friends — read **0 for non-root
+processes**, over any interval; `GPU Energy` (nJ) still reports. Ultstat therefore reads GPU power
+in the app (subscribed to that one channel: 0.16 ms per sample vs 2.2 ms for the whole group) and
+leaves CPU/ANE/DRAM power to the root helper.

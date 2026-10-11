@@ -20,6 +20,8 @@ struct DashboardView: View {
                     diskCard(r)
                     if !r.sensors.isEmpty { sensorsCard(r) }
                     if let b = r.battery { BatteryCard(b: b, systemPower: r.systemPower) }
+                    if !r.fans.isEmpty { fansCard(r) }
+                    if !r.accessories.isEmpty { accessoriesCard(r) }
                     ProcessesCard()
                 }
                 .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: r)
@@ -115,6 +117,7 @@ struct DashboardView: View {
             Sparkline(values: model.gpuHistory, maxValue: 1).frame(height: 30)
             if let rnd = r.gpu?.renderer { StatRow(label: "Renderer", value: MetricFormat.percent(rnd)) }
             if let t = r.gpu?.tiler { StatRow(label: "Tiler", value: MetricFormat.percent(t)) }
+            if let w = r.componentPower?.gpu { StatRow(label: "Power", value: w < 1 ? String(format: "%.0f mW", w * 1000) : String(format: "%.2f W", w)) }
         }
     }
 
@@ -151,6 +154,29 @@ struct DashboardView: View {
                     StatRow(label: "Write", value: ByteFormat.rate(d.write))
                 }
                 StatRow(label: "Free", value: ByteFormat.size(d.available))
+            }
+        }
+    }
+
+    private func fansCard(_ r: Readings) -> some View {
+        MetricCard(title: r.fans.count == 1 ? "Fan" : "Fans", symbol: "fan", value: r.fans.map { "\(Int($0.rpm))" }.joined(separator: " · ") + " rpm") {
+            ForEach(r.fans) { f in
+                if let fr = f.fraction { Meter(value: Float(fr)) }
+            }
+        }
+    }
+
+    private func accessoriesCard(_ r: Readings) -> some View {
+        MetricCard(title: "Accessories", symbol: "keyboard", value: "") {
+            ForEach(r.accessories) { a in
+                let low = a.percent <= 15
+                HStack {
+                    Text(a.component.map { "\(a.name) (\($0))" } ?? a.name).lineLimit(1).foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    if low { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning) }
+                    Text("\(a.percent)%").monospacedDigit()
+                }
+                .font(.system(size: 11))
             }
         }
     }

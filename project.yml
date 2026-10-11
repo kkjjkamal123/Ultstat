@@ -59,6 +59,7 @@ targets:
         NSHumanReadableCopyright: "Copyright © 2026 kkjjkamal23. Apache License 2.0."
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
+        NSBluetoothAlwaysUsageDescription: "Ultstat reads the battery level of your connected AirPods and Bluetooth headphones to show it in the dashboard."
     entitlements:
       path: App/Ultstat.entitlements
       properties:

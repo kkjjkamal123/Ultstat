@@ -24,6 +24,8 @@
 	<string>public.app-category.utilities</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Ultstat reads the battery level of your connected AirPods and Bluetooth headphones to show it in the dashboard.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 kkjjkamal23. Apache License 2.0.</string>
 	<key>NSSupportsAutomaticTermination</key>

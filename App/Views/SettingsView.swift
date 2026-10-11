@@ -29,6 +29,8 @@ private struct GeneralSettings: View {
                 Text("Celsius").tag(TemperatureUnit.celsius)
                 Text("Fahrenheit").tag(TemperatureUnit.fahrenheit)
             }
+            Toggle("Show AirPods and Bluetooth headphone batteries", isOn: $settings.stored.bluetoothAccessories)
+                .accessibilityIdentifier("settings.bluetooth")
             Section {
                 Text("Longer intervals use less power. Ultstat stops sampling entirely while the display is off and only reads metrics that are visible.")
                     .font(.callout).foregroundStyle(.secondary)

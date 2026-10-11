@@ -13,11 +13,12 @@ let package = Package(
             name: "CSMC",
             linkerSettings: [.linkedFramework("IOKit")]
         ),
-        .target(name: "CPrivate", linkerSettings: [.linkedFramework("IOKit")]),
+        .target(name: "CPrivate", linkerSettings: [.linkedFramework("IOKit"), .linkedLibrary("IOReport")]),
         .target(
             name: "UltstatCore",
             dependencies: ["CSMC", "CPrivate"],
-            swiftSettings: [.enableUpcomingFeature("ExistentialAny")]
+            swiftSettings: [.enableUpcomingFeature("ExistentialAny")],
+            linkerSettings: [.linkedFramework("IOBluetooth")]
         ),
         .executableTarget(name: "ultstat-smc", dependencies: ["UltstatCore"]),
         .executableTarget(name: "ultstat-bench", dependencies: ["UltstatCore", "CPrivate"]),

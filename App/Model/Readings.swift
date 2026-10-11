@@ -12,6 +12,9 @@ struct Readings: Equatable, Sendable {
     var sensors: [SensorGroup: GroupReading] = [:]
     var battery: BatterySnapshot?
     var systemPower: Double?          // W, from SMC PSTR
+    var componentPower: ComponentPower?
+    var fans: [FanReading] = []
+    var accessories: [AccessoryBattery] = []
     var processes: [ProcessUsage] = []  // top by CPU; other orderings read from the sampler
 }
 

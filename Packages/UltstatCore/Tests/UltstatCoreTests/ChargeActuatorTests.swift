@@ -126,3 +126,44 @@ final class FakePrefs: SystemPreferences, @unchecked Sendable {
         }
     }
 }
+
+/// SMC fake for float keys (fans).
+final class FakeFloatSMC: SMCAccess, @unchecked Sendable {
+    var floats: [SMCKey: Float]
+    init(_ f: [String: Float]) { floats = Dictionary(uniqueKeysWithValues: f.map { (SMCKey($0.key), $0.value) }) }
+    func info(_ key: SMCKey) -> SMCKeyInfo? { floats[key] == nil ? nil : SMCKeyInfo(size: 4, type: .flt, attributes: 0x80) }
+    func read(_ key: SMCKey) throws(SMCError) -> SMCValue {
+        guard let v = floats[key], let i = info(key) else { throw .keyNotFound(key) }
+        return SMCValue(info: i, bytes: withUnsafeBytes(of: v.bitPattern.littleEndian) { Array($0) })
+    }
+    func write(_ key: SMCKey, bytes: [UInt8]) throws(SMCError) { throw .writeFailed(key, 1, firmwareResult: 0) }
+}
+
+@Suite struct FanAndAccessoryTests {
+    @Test func fanlessMacHasNoSampler() {
+        #expect(FanSampler(smc: FakeFloatSMC([:])) == nil)
+        #expect(FanSampler(smc: FakeFloatSMC(["FNum": 0])) == nil)
+    }
+
+    @Test func readsTwoFans() {
+        let smc = FakeFloatSMC(["FNum": 2, "F0Ac": 1800, "F0Mn": 1200, "F0Mx": 6000, "F1Ac": 2400, "F1Mn": 1200, "F1Mx": 6000])
+        let s = FanSampler(smc: smc)!
+        s.sample(tick: 0)
+        #expect(s.latest.map(\.rpm) == [1800, 2400])
+        #expect(abs((s.latest[0].fraction ?? 0) - 0.125) < 1e-9)
+    }
+
+    @Test func accessoryKinds() {
+        #expect(AccessorySampler.kind(for: "Magic Keyboard with Touch ID") == .keyboard)
+        #expect(AccessorySampler.kind(for: "Kamal’s AirPods Pro") == .headphones)
+        #expect(AccessorySampler.kind(for: "DUALSHOCK 4 Wireless Controller") == .gamepad)
+        #expect(AccessorySampler.kind(for: "Magic Trackpad") == .trackpad)
+        #expect(AccessorySampler.kind(for: "Something") == .other)
+    }
+
+    @Test func hidScanDoesNotCrashWithoutDevices() {
+        let s = AccessorySampler(includeBluetooth: false)
+        s.sample(tick: 0)
+        #expect(s.latest.allSatisfy { (0...100).contains($0.percent) })
+    }
+}

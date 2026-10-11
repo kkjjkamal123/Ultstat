@@ -61,6 +61,7 @@ final class AppSettings {
         var chargePolicy = ChargePolicy(limit: 80, sailingRange: 5)
         var chargeControlEnabled = false
         var lowPowerSampling = true
+        var bluetoothAccessories = false
     }
 
     private static let key = "settings.v1"
