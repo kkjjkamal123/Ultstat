@@ -1,0 +1,132 @@
+name: Ultstat
+options:
+  bundleIdPrefix: io.github.kkjjkamal23
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  developmentLanguage: en
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    ENABLE_HARDENED_RUNTIME: YES
+    DEAD_CODE_STRIPPING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+  configs:
+    Release:
+      SWIFT_OPTIMIZATION_LEVEL: -O
+      SWIFT_COMPILATION_MODE: wholemodule
+      LLVM_LTO: YES_THIN
+      STRIP_INSTALLED_PRODUCT: YES
+      DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+
+packages:
+  UltstatCore:
+    path: Packages/UltstatCore
+
+targets:
+  Ultstat:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+      - path: Shared
+    resources: []
+    dependencies:
+      - package: UltstatCore
+        product: UltstatCore
+      - target: UltstatHelper
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Ultstat
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: "Copyright © 2026 kkjjkamal23. Apache License 2.0."
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+    entitlements:
+      path: App/Ultstat.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+    postBuildScripts:
+      - name: Embed helper launchd plist
+        script: |
+          set -e
+          DEST="${BUILT_PRODUCTS_DIR}/${CONTENTS_FOLDER_PATH}/Library/LaunchDaemons"
+          mkdir -p "$DEST"
+          cp "${SRCROOT}/Helper/io.github.kkjjkamal23.Ultstat.Helper.plist" "$DEST/"
+        inputFiles:
+          - $(SRCROOT)/Helper/io.github.kkjjkamal23.Ultstat.Helper.plist
+        outputFiles:
+          - $(BUILT_PRODUCTS_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LaunchDaemons/io.github.kkjjkamal23.Ultstat.Helper.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kkjjkamal23.Ultstat
+        PRODUCT_NAME: Ultstat
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_PREVIEWS: YES
+        COMBINE_HIDPI_IMAGES: YES
+
+  UltstatHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: Helper
+        excludes:
+          - "*.plist"
+      - path: Shared
+    dependencies:
+      - package: UltstatCore
+        product: UltstatCore
+    settings:
+      base:
+        PRODUCT_NAME: io.github.kkjjkamal23.Ultstat.Helper
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kkjjkamal23.Ultstat.Helper
+        SKIP_INSTALL: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        INFOPLIST_FILE: Helper/Info.plist
+
+  UltstatUITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Ultstat
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.kkjjkamal23.Ultstat.UITests
+        TEST_TARGET_NAME: Ultstat
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  Ultstat:
+    build:
+      targets:
+        Ultstat: all
+        UltstatHelper: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - UltstatUITests
+    profile:
+      config: Release
+    archive:
+      config: Release

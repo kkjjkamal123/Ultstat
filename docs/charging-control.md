@@ -11,7 +11,7 @@ Test machine: MacBook Air M5 (Mac17,4), macOS 27.0.1 (26A434), SMC with 2429 key
 | Firmware / macOS | Stop charging (adapter stays on) | Resume charging | Force discharge (adapter bypassed) |
 |---|---|---|---|
 | Legacy Apple Silicon (≤ macOS 15) | `CH0B` = `0x02`, `CH0C` = `0x02` | both `0x00` | `CH0I` = `0x01` |
-| macOS 26 "Tahoe" firmware | `CHTE` (ui32) = `0x01000000` | `CHTE` = `0x00000000` | `CHIE` (hex_, 1 byte) = `0x08` |
+| macOS 26 "Tahoe" firmware | `CHTE` (ui32) = `0x01000000`, bytes `01 00 00 00` | `CHTE` = `00 00 00 00` | `CHIE` (hex_, 1 byte) = `0x08` |
 | macOS 27 (M5 tested) | **No SMC inhibit key exists.** Use the native limit (below) | native limit | `CHIE` = `0x08`, restore `0x00` |
 
 On the M5/macOS 27 test machine `CHTE`, `CH0B`, `CH0C`, `CH0I`, `CHWA` and `BCLM` are all absent.
