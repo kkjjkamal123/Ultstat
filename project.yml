@@ -14,7 +14,6 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: NO
-    ENABLE_HARDENED_RUNTIME: YES
     DEAD_CODE_STRIPPING: YES
     SWIFT_STRICT_CONCURRENCY: complete
     CODE_SIGN_STYLE: Automatic
@@ -23,7 +22,11 @@ settings:
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
   configs:
+    Debug:
+      # Unsigned debug hosts must accept the injected XCTest bundle.
+      ENABLE_HARDENED_RUNTIME: NO
     Release:
+      ENABLE_HARDENED_RUNTIME: YES
       SWIFT_OPTIMIZATION_LEVEL: -O
       SWIFT_COMPILATION_MODE: wholemodule
       LLVM_LTO: YES_THIN
@@ -45,6 +48,8 @@ targets:
     dependencies:
       - package: UltstatCore
         product: UltstatCore
+      - package: UltstatCore
+        product: UltstatKit
       - target: UltstatHelper
         embed: true
         codeSign: true

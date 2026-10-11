@@ -1,5 +1,6 @@
 import SwiftUI
 import UltstatCore
+import UltstatKit
 
 struct DashboardView: View {
     @Environment(AppModel.self) private var model

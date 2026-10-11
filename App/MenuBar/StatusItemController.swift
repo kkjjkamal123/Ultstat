@@ -1,3 +1,4 @@
+import UltstatKit
 import AppKit
 import os
 import SwiftUI

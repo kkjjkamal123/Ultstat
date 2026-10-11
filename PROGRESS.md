@@ -30,6 +30,16 @@ CHTE, CHIE (new firmware) · CH0B, CH0C, CH0I (old firmware) · CHWA · ACLC (Ma
 - Charge control: see docs/charging-control.md (three generations; macOS 27 uses the native MCL limit).
 - Decision: Apple Silicon only (arm64). macOS 26+.
 
+## Needs the user (morning checklist)
+1. `sudo DevToolsSecurity -enable` — Developer Mode is off, so hosted/UI XCTest runs hang waiting for admin auth.
+2. Make Ultstat visible: ⌘-drag it out of Latch's hidden section (or allow it in System Settings › Menu Bar).
+3. Approve the helper: Settings › Battery › Install, then allow it in System Settings › General › Login Items.
+   NOTE: no signing identity on this Mac; SMAppService daemons may refuse ad-hoc builds. A free Apple ID in
+   Xcode (Settings › Accounts) gives an "Apple Development" certificate. Fallback: installer via admin prompt.
+4. Supervised live test of charge control (native MCL path on M5/macOS 27): set limit 75/80, watch it hold;
+   verify sub-80 limits, discharge (CHIE), restore on quit/uninstall.
+5. Consider changing the macOS password (it was typed into the chat).
+
 ## Iteration plan
 - [x] 0. Recon: references cloned, skills vetted and installed, tooling (xcodegen, swiftlint, swiftformat, JDK 21, Ghidra)
 - [x] 1. RE AlDente charge-control logic → docs/charging-control.md. macOS 27: native MCL limit via root prefs + Darwin notify; discharge via CHIE=0x08. Open: <80 % limits, sailing/heat/calibration logic details.
@@ -49,6 +59,7 @@ CHTE, CHIE (new firmware) · CH0B, CH0C, CH0I (old firmware) · CHWA · ACLC (Ma
 - [ ] 15+. Audit/fix iterations (≥15 total), release packaging (DMG, notarization when Developer ID is available), README, LICENSE, CONTRIBUTING
 
 ## Iteration log
+- 2026-10-12 — Iteration 3: icon ("the charge is the chart", tools/make-icon.swift); dashboard redesign with palette validated by the dataviz checker; top processes via libproc with per-process watts (ri_energy_nj); GPU power via IOReport (CPU/ANE/DRAM energy read 0 unprivileged on macOS 27, so they move to the helper); fans; accessory batteries (HID without permission, earbuds opt-in); UltstatKit module so app logic tests run with `swift test` (60 tests). Idle: 1.56 ms/s, 0.49 wakeups/s, energy 0.16.
 - 2026-10-12 — Iteration 2: app + helper built (Release 2.1 MB). Power iterations on default menu bar (cpu, memory, temp, battery), 20–30 s powermetrics:
   | build | CPU ms/s | wakeups/s | energy |
   |---|---|---|---|

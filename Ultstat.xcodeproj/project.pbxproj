@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		040BA536E60FC6C4E02921BD /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = C271CB9D2AC32BDBE365CD2F /* Settings.swift */; };
 		1042D503201ECFD6303FE9EC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048631DDF96E16E02F98C2A4 /* SettingsView.swift */; };
 		286D38501786DDA8C6E7FAE3 /* UltstatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 514CDD3C25D0D5440C64910A /* UltstatCore */; };
 		2C36C2BADD97C4961FE62D52 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC92AE558E76F41EDC32F9E1 /* Components.swift */; };
@@ -16,13 +15,12 @@
 		382D8E59608E2594D7FAD649 /* UltstatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E44C980E0562D9E4D185BCC8 /* UltstatApp.swift */; };
 		4E0426DAAF3D36BDF2B84854 /* UltstatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0982CB0882891D9CC8A27FA9 /* UltstatCore */; };
 		574EDB69846F2CC597655A97 /* HelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9440F0AA793C3878B660A /* HelperProtocol.swift */; };
-		66A326CE252ED40CDD4801D0 /* MenuBarRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8231CA5914B1A4DBC2BC5D58 /* MenuBarRenderer.swift */; };
+		88A41A7A5DE8A3C7D9E804C2 /* UltstatKit in Frameworks */ = {isa = PBXBuildFile; productRef = 2D402B70FBEB8CEFA74CD02C /* UltstatKit */; };
 		93DCCA9D53D72A0A884393B5 /* MonitorHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3376A0633BCCB6718857DA5 /* MonitorHub.swift */; };
 		B4E12987DFDF23A949CD4522 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D1BD360FF791863A3428125 /* DashboardView.swift */; };
 		BCF21531B3E2F74890703621 /* UltstatUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87744FC79CE117DED43FC717 /* UltstatUITests.swift */; };
 		BDDC7D8573021F08919156F6 /* UltstatHelper in Embed Dependencies */ = {isa = PBXBuildFile; fileRef = 62F82026F1C7B696E58CB1BE /* UltstatHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BFC7DB33EB2484B3DF7FC388 /* ChargeController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F7CDBE236D3A77C39C7A296 /* ChargeController.swift */; };
-		D50601F11901F779DE0D17F1 /* Readings.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE57877F2F6CFD1DBD308E25 /* Readings.swift */; };
 		DA2007EFCEEFA0507D425834 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29E9824A71E3F3FA81CAA8A2 /* AppModel.swift */; };
 		DA90E0D818FC479EDAE6AC35 /* HelperProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27F9440F0AA793C3878B660A /* HelperProtocol.swift */; };
 		E01488D519A89628CE52FDE8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D1C872B8416F2778EACD4520 /* Assets.xcassets */; };
@@ -70,17 +68,14 @@
 		62F82026F1C7B696E58CB1BE /* UltstatHelper */ = {isa = PBXFileReference; includeInIndex = 0; path = UltstatHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 		6F7CDBE236D3A77C39C7A296 /* ChargeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeController.swift; sourceTree = "<group>"; };
 		74B02CD3FE49D7E5D4224588 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		8231CA5914B1A4DBC2BC5D58 /* MenuBarRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarRenderer.swift; sourceTree = "<group>"; };
 		87744FC79CE117DED43FC717 /* UltstatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UltstatUITests.swift; sourceTree = "<group>"; };
 		9D1BD360FF791863A3428125 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		A1790E42B3A6CE599027FE78 /* UltstatUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UltstatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A6F4BCF486F59E064C3C7CDA /* UltstatCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = UltstatCore; path = Packages/UltstatCore; sourceTree = SOURCE_ROOT; };
 		BC92AE558E76F41EDC32F9E1 /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
 		BDD4CD97B8C0248FF4C7944F /* HelperClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperClient.swift; sourceTree = "<group>"; };
-		C271CB9D2AC32BDBE365CD2F /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
 		D1C872B8416F2778EACD4520 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		DBDB4D96538DEDD7ED979B91 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
-		DE57877F2F6CFD1DBD308E25 /* Readings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Readings.swift; sourceTree = "<group>"; };
 		E3376A0633BCCB6718857DA5 /* MonitorHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonitorHub.swift; sourceTree = "<group>"; };
 		E44C980E0562D9E4D185BCC8 /* UltstatApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UltstatApp.swift; sourceTree = "<group>"; };
 		E6FAA490A102FB93DBDA0888 /* SnapshotExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotExporter.swift; sourceTree = "<group>"; };
@@ -93,6 +88,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4E0426DAAF3D36BDF2B84854 /* UltstatCore in Frameworks */,
+				88A41A7A5DE8A3C7D9E804C2 /* UltstatKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -110,7 +106,6 @@
 		2C64BBE30E82AE938DBECB49 /* MenuBar */ = {
 			isa = PBXGroup;
 			children = (
-				8231CA5914B1A4DBC2BC5D58 /* MenuBarRenderer.swift */,
 				3D84EBE5B9961DB25679D343 /* StatusItemController.swift */,
 			);
 			path = MenuBar;
@@ -218,8 +213,6 @@
 			children = (
 				29E9824A71E3F3FA81CAA8A2 /* AppModel.swift */,
 				E3376A0633BCCB6718857DA5 /* MonitorHub.swift */,
-				DE57877F2F6CFD1DBD308E25 /* Readings.swift */,
-				C271CB9D2AC32BDBE365CD2F /* Settings.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -245,6 +238,7 @@
 			name = Ultstat;
 			packageProductDependencies = (
 				0982CB0882891D9CC8A27FA9 /* UltstatCore */,
+				2D402B70FBEB8CEFA74CD02C /* UltstatKit */,
 			);
 			productName = Ultstat;
 			productReference = F85D2740F68954E08CBD032A /* Ultstat.app */;
@@ -389,10 +383,7 @@
 				B4E12987DFDF23A949CD4522 /* DashboardView.swift in Sources */,
 				2CD1699B071B3E78484968C8 /* HelperClient.swift in Sources */,
 				574EDB69846F2CC597655A97 /* HelperProtocol.swift in Sources */,
-				66A326CE252ED40CDD4801D0 /* MenuBarRenderer.swift in Sources */,
 				93DCCA9D53D72A0A884393B5 /* MonitorHub.swift in Sources */,
-				D50601F11901F779DE0D17F1 /* Readings.swift in Sources */,
-				040BA536E60FC6C4E02921BD /* Settings.swift in Sources */,
 				1042D503201ECFD6303FE9EC /* SettingsView.swift in Sources */,
 				E5A41094BC4BBD961A967C69 /* SnapshotExporter.swift in Sources */,
 				319A9F75E96E02C0D75917DE /* StatusItemController.swift in Sources */,
@@ -586,7 +577,7 @@
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -724,6 +715,10 @@
 		0982CB0882891D9CC8A27FA9 /* UltstatCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = UltstatCore;
+		};
+		2D402B70FBEB8CEFA74CD02C /* UltstatKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = UltstatKit;
 		};
 		514CDD3C25D0D5440C64910A /* UltstatCore */ = {
 			isa = XCSwiftPackageProductDependency;

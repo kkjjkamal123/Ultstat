@@ -2,6 +2,7 @@ import Foundation
 import os
 import ServiceManagement
 import UltstatCore
+import UltstatKit
 
 private let log = Logger(subsystem: "io.github.kkjjkamal23.Ultstat", category: "helper")
 

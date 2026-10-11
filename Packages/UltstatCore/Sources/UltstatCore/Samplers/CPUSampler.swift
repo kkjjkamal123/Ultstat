@@ -12,6 +12,15 @@ public struct CPULoad: Sendable, Equatable {
     public var performance: Float?
     public var efficiency: Float?
 
+    public init(total: Float, user: Float, system: Float, perCore: [Float], performance: Float?, efficiency: Float?) {
+        self.total = total
+        self.user = user
+        self.system = system
+        self.perCore = perCore
+        self.performance = performance
+        self.efficiency = efficiency
+    }
+
     public static let zero = CPULoad(total: 0, user: 0, system: 0, perCore: [], performance: nil, efficiency: nil)
 }
 

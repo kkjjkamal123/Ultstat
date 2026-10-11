@@ -2,12 +2,12 @@ import Foundation
 import Observation
 import UltstatCore
 
-enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
+public enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
     case cpu, gpu, memory, network, disk, temperature, power, battery
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .cpu: "CPU"
         case .gpu: "GPU"
@@ -20,7 +20,7 @@ enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var symbol: String {
+    public var symbol: String {
         switch self {
         case .cpu: "cpu"
         case .gpu: "rectangle.3.group"
@@ -34,14 +34,14 @@ enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum WidgetStyle: String, Codable, CaseIterable, Sendable {
+public enum WidgetStyle: String, Codable, CaseIterable, Sendable {
     case text, bar, sparkline
 }
 
-enum TemperatureUnit: String, Codable, CaseIterable, Sendable {
+public enum TemperatureUnit: String, Codable, CaseIterable, Sendable {
     case celsius, fahrenheit
 
-    func format(_ c: Float) -> String {
+    public func format(_ c: Float) -> String {
         switch self {
         case .celsius: String(format: "%.0f°", c)
         case .fahrenheit: String(format: "%.0f°", c * 9 / 5 + 32)
@@ -51,27 +51,33 @@ enum TemperatureUnit: String, Codable, CaseIterable, Sendable {
 
 /// User preferences, persisted to UserDefaults as one property list blob (one write per change).
 @MainActor @Observable
-final class AppSettings {
-    struct Stored: Codable, Equatable {
-        var items: [MenuBarItem] = [.cpu, .memory, .temperature, .battery]
-        var styles: [MenuBarItem: WidgetStyle] = [.cpu: .text, .memory: .text]
-        var interval: Int = 2
-        var temperatureUnit: TemperatureUnit = .celsius
-        var showIcons: Bool = true
-        var chargePolicy = ChargePolicy(limit: 80, sailingRange: 5)
-        var chargeControlEnabled = false
-        var lowPowerSampling = true
-        var bluetoothAccessories = false
+public final class AppSettings {
+    public struct Stored: Codable, Equatable, Sendable {
+        public init() {}
+
+        public init(items: [MenuBarItem]) {
+            self.items = items
+        }
+
+        public var items: [MenuBarItem] = [.cpu, .memory, .temperature, .battery]
+        public var styles: [MenuBarItem: WidgetStyle] = [.cpu: .text, .memory: .text]
+        public var interval: Int = 2
+        public var temperatureUnit: TemperatureUnit = .celsius
+        public var showIcons: Bool = true
+        public var chargePolicy = ChargePolicy(limit: 80, sailingRange: 5)
+        public var chargeControlEnabled = false
+        public var lowPowerSampling = true
+        public var bluetoothAccessories = false
     }
 
     private static let key = "settings.v1"
     private let defaults: UserDefaults
 
-    var stored: Stored {
+    public var stored: Stored {
         didSet { if stored != oldValue { save() } }
     }
 
-    init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         if let data = defaults.data(forKey: Self.key),
            let s = try? PropertyListDecoder().decode(Stored.self, from: data) {
@@ -89,11 +95,11 @@ final class AppSettings {
 
     @ObservationIgnored private var overrideItems: [MenuBarItem]?
 
-    func style(for item: MenuBarItem) -> WidgetStyle { stored.styles[item] ?? .text }
+    public func style(for item: MenuBarItem) -> WidgetStyle { stored.styles[item] ?? .text }
 
-    func isEnabled(_ item: MenuBarItem) -> Bool { stored.items.contains(item) }
+    public func isEnabled(_ item: MenuBarItem) -> Bool { stored.items.contains(item) }
 
-    func toggle(_ item: MenuBarItem) {
+    public func toggle(_ item: MenuBarItem) {
         if let i = stored.items.firstIndex(of: item) {
             stored.items.remove(at: i)
         } else {
@@ -103,7 +109,7 @@ final class AppSettings {
         }
     }
 
-    func resetToDefaults() { stored = Stored() }
+    public func resetToDefaults() { stored = Stored() }
 
     private func save() {
         guard overrideItems == nil else { return }

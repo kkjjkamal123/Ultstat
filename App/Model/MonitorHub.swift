@@ -1,6 +1,7 @@
 import AppKit
 import Synchronization
 import UltstatCore
+import UltstatKit
 
 /// Owns every sampler and turns "what is on screen" into scheduler demand.
 ///

@@ -2,11 +2,11 @@ import AppKit
 import UltstatCore
 
 /// Formats readings into compact menu-bar strings. Pure functions, unit-testable.
-enum MetricFormat {
-    static func percent(_ v: Float) -> String { "\(Int((v * 100).rounded()))%" }
+public enum MetricFormat {
+    public static func percent(_ v: Float) -> String { "\(Int((v * 100).rounded()))%" }
 
     /// Bytes/s → "0K", "12K", "1.2M", "34M", "1.1G". At most four characters so widths stay stable.
-    static func rate(_ bytesPerSecond: Double) -> String {
+    public static func rate(_ bytesPerSecond: Double) -> String {
         let v = max(0, bytesPerSecond)
         switch v {
         case ..<1_000: return "0K"
@@ -17,21 +17,27 @@ enum MetricFormat {
         }
     }
 
-    static func watts(_ w: Double) -> String { w < 9.95 ? String(format: "%.1fW", w) : "\(Int(w.rounded()))W" }
+    public static func watts(_ w: Double) -> String { w < 9.95 ? String(format: "%.1fW", w) : "\(Int(w.rounded()))W" }
 }
 
 /// One drawable segment of the status item.
-struct Segment: Equatable {
-    enum Content: Equatable {
+public struct Segment: Equatable, Sendable {
+    public enum Content: Equatable, Sendable {
         case text(String)
         case stacked(top: String, bottom: String)
         case bar(Float)
     }
 
-    var symbol: String?
-    var content: Content
+    public var symbol: String?
+    public var content: Content
     /// Widest string this segment can show; fixes its width so the item never resizes.
-    var slot: String = ""
+    public var slot: String = ""
+
+    public init(symbol: String?, content: Content, slot: String = "") {
+        self.symbol = symbol
+        self.content = content
+        self.slot = slot
+    }
 }
 
 /// Renders segments into a template image sized for the menu bar.
@@ -42,8 +48,8 @@ struct Segment: Equatable {
 /// - every segment occupies a fixed-width slot sized for its widest possible value, so the status
 ///   item's width never changes and the menu bar never has to relayout.
 @MainActor
-enum MenuBarRenderer {
-    static let height: CGFloat = 22
+public enum MenuBarRenderer {
+    public static let height: CGFloat = 22
     private static let spacing: CGFloat = 8
     private static let iconGap: CGFloat = 3
 
@@ -55,7 +61,7 @@ enum MenuBarRenderer {
     private static var symbols: [String: NSImage] = [:]
     private static var slotWidths: [String: CGFloat] = [:]
 
-    static func segments(for items: [MenuBarItem], readings r: Readings, settings: AppSettings.Stored) -> [Segment] {
+    public static func segments(for items: [MenuBarItem], readings r: Readings, settings: AppSettings.Stored) -> [Segment] {
         items.compactMap { item -> Segment? in
             let icon = settings.showIcons ? item.symbol : nil
             let style = settings.styles[item] ?? .text
@@ -88,7 +94,7 @@ enum MenuBarRenderer {
         }
     }
 
-    static func batterySymbol(_ b: BatterySnapshot) -> String {
+    public static func batterySymbol(_ b: BatterySnapshot) -> String {
         if b.isCharging { return "battery.100percent.bolt" }
         if b.externalConnected { return "powerplug" }
         switch b.percent {
@@ -100,7 +106,7 @@ enum MenuBarRenderer {
         }
     }
 
-    static func image(for segments: [Segment], scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2) -> NSImage {
+    public static func image(for segments: [Segment], scale: CGFloat = NSScreen.main?.backingScaleFactor ?? 2) -> NSImage {
         let widths = segments.map(width(of:))
         let total = max(1, widths.reduce(0, +) + spacing * CGFloat(max(0, segments.count - 1)))
         let size = NSSize(width: ceil(total), height: height)
@@ -125,7 +131,7 @@ enum MenuBarRenderer {
     }
 
     /// Renders the segments as a bitmap already tinted with `tint`, ready to use as layer contents.
-    static func cgImage(for segments: [Segment], scale: CGFloat, tint: CGColor) -> (image: CGImage, size: CGSize)? {
+    public static func cgImage(for segments: [Segment], scale: CGFloat, tint: CGColor) -> (image: CGImage, size: CGSize)? {
         let mask = image(for: segments, scale: scale)
         guard let rep = mask.representations.first as? NSBitmapImageRep, let cg = rep.cgImage else { return nil }
         let w = cg.width, h = cg.height
@@ -200,7 +206,7 @@ enum MenuBarRenderer {
         }
     }
 
-    private static func accessibilityText(_ seg: Segment) -> String {
+    public static func accessibilityText(_ seg: Segment) -> String {
         switch seg.content {
         case .text(let t): t
         case .stacked(let a, let b): "\(a) \(b)"

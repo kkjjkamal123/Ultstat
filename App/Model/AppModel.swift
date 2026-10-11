@@ -3,6 +3,7 @@ import Observation
 import ServiceManagement
 import SwiftUI
 import UltstatCore
+import UltstatKit
 
 @MainActor @Observable
 final class AppModel {

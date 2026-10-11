@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS("26.0")],
     products: [
         .library(name: "UltstatCore", targets: ["UltstatCore"]),
+        .library(name: "UltstatKit", targets: ["UltstatKit"]),
         .executable(name: "ultstat-smc", targets: ["ultstat-smc"]),
     ],
     targets: [
@@ -20,8 +21,10 @@ let package = Package(
             swiftSettings: [.enableUpcomingFeature("ExistentialAny")],
             linkerSettings: [.linkedFramework("IOBluetooth")]
         ),
+        .target(name: "UltstatKit", dependencies: ["UltstatCore"]),
         .executableTarget(name: "ultstat-smc", dependencies: ["UltstatCore"]),
         .executableTarget(name: "ultstat-bench", dependencies: ["UltstatCore", "CPrivate"]),
         .testTarget(name: "UltstatCoreTests", dependencies: ["UltstatCore"]),
+        .testTarget(name: "UltstatKitTests", dependencies: ["UltstatKit", "UltstatCore"]),
     ]
 )

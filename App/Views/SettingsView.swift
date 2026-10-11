@@ -1,5 +1,6 @@
 import SwiftUI
 import UltstatCore
+import UltstatKit
 
 struct SettingsView: View {
     var body: some View {

@@ -40,6 +40,29 @@ public struct BatterySnapshot: Sendable, Equatable {
     public var adapter: AdapterInfo?
     public var flow: PowerFlow?
 
+    public init(percent: Int, hardwarePercent: Double?, isCharging: Bool, externalConnected: Bool, fullyCharged: Bool,
+                amperage: Int, voltage: Int, cycleCount: Int, designCapacity: Int, fullChargeCapacity: Int?,
+                nominalChargeCapacity: Int?, remainingCapacity: Int?, minutesToEmpty: Int?, minutesToFull: Int?,
+                notChargingReason: Int?, adapter: AdapterInfo?, flow: PowerFlow?) {
+        self.percent = percent
+        self.hardwarePercent = hardwarePercent
+        self.isCharging = isCharging
+        self.externalConnected = externalConnected
+        self.fullyCharged = fullyCharged
+        self.amperage = amperage
+        self.voltage = voltage
+        self.cycleCount = cycleCount
+        self.designCapacity = designCapacity
+        self.fullChargeCapacity = fullChargeCapacity
+        self.nominalChargeCapacity = nominalChargeCapacity
+        self.remainingCapacity = remainingCapacity
+        self.minutesToEmpty = minutesToEmpty
+        self.minutesToFull = minutesToFull
+        self.notChargingReason = notChargingReason
+        self.adapter = adapter
+        self.flow = flow
+    }
+
     /// Nominal ÷ design capacity, the basis of macOS's "Maximum Capacity" (capped at 100 % there).
     public var health: Double? {
         guard designCapacity > 0, let n = nominalChargeCapacity else { return nil }
