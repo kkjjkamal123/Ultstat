@@ -33,14 +33,14 @@ CHTE, CHIE (new firmware) · CH0B, CH0C, CH0I (old firmware) · CHWA · ACLC (Ma
 ## Iteration plan
 - [x] 0. Recon: references cloned, skills vetted and installed, tooling (xcodegen, swiftlint, swiftformat, JDK 21, Ghidra)
 - [x] 1. RE AlDente charge-control logic → docs/charging-control.md. macOS 27: native MCL limit via root prefs + Darwin notify; discharge via CHIE=0x08. Open: <80 % limits, sailing/heat/calibration logic details.
-- [ ] 2. Project skeleton (XcodeGen): app, helper, core package, tests; CI lint/format
-- [ ] 3. SMC client + key enumeration + sensor discovery for M5
-- [ ] 4. Scheduler + demand model + ring buffers; power baseline harness (powermetrics script)
-- [ ] 5. CPU, RAM, disk, network samplers (libproc/sysctl, no subprocesses)
-- [ ] 6. GPU, power (IOReport), temperatures, fans
-- [ ] 7. Battery info + Bluetooth device batteries
-- [ ] 8. Helper daemon + XPC + charge limit, sailing, discharge, top-up, heat protection, calibration, MagSafe LED, sleep handling
-- [ ] 9. Menu-bar widget renderer (all widget styles) + popovers
+- [x] 2. Project skeleton (XcodeGen): app, helper, core package, tests (CI lint/format still TODO)
+- [x] 3. SMC client + key enumeration + sensor discovery for M5
+- [x] 4. Scheduler + demand model + ring buffers; power harness (reference/pm-summary.py)
+- [x] 5. CPU, RAM, disk, network samplers
+- [~] 6. GPU, system power (PSTR), temperatures done. TODO: IOReport per-component power, fans (none on M5; implement generically)
+- [~] 7. Battery info done (event-driven). TODO: Bluetooth device batteries
+- [~] 8. Helper + XPC + state machine + actuators done, unit tested with fakes. NOT yet installed or tested live (needs user: approval + supervised SMC test). TODO: calibration mode, schedule
+- [~] 9. Menu-bar renderer (text/bar/stacked) + popover dashboard. TODO: sparkline style in menu bar, design polish
 - [ ] 10. Settings UI, onboarding, launch at login, permissions (Menu Bar privacy on macOS 26+)
 - [ ] 11. Icon + visual polish + animations
 - [ ] 12. Notifications/alerts, clock, extras beyond Stats/AlDente
@@ -49,5 +49,16 @@ CHTE, CHIE (new firmware) · CH0B, CH0C, CH0I (old firmware) · CHWA · ACLC (Ma
 - [ ] 15+. Audit/fix iterations (≥15 total), release packaging (DMG, notarization when Developer ID is available), README, LICENSE, CONTRIBUTING
 
 ## Iteration log
+- 2026-10-12 — Iteration 2: app + helper built (Release 2.1 MB). Power iterations on default menu bar (cpu, memory, temp, battery), 20–30 s powermetrics:
+  | build | CPU ms/s | wakeups/s | energy |
+  |---|---|---|---|
+  | first build | 8.38 | 5.36 | 1.01 |
+  | cached symbols/attrs, rasterise once, fixed slots | 5.55 | 5.21 | 0.60 |
+  | CALayer contents instead of NSStatusBarButton.image | **1.07** | **0.59** | **0.13** |
+  | Stats 3.0.20 | 57.15 | 9.17 | 7.37 |
+  | AlDente 1.39.4 | 10.97 | 3.51 | 1.63 |
+  Per widget alone: none 0.09, battery 0.05, memory 0.11, temperature 0.22, network 0.18 ms/s. Footprint: Ultstat 44 MB, Stats 151 MB, AlDente 80 MB.
+  NOTE: the user's menu-bar manager (Latch) hides new items left of its chevron; Ultstat's item is created and visible=true but hidden there. Use `-UltstatSnapshotDir DIR` to render PNGs.
+  NOTE: zsh `log` is a builtin; use /usr/bin/log.
 - 2026-10-12 — Iteration 1: SMC/IOHID benchmarks, CPU sampler (xnu host_statistics rate-limit found and handled), AlDente charge-control RE complete. 15 tests passing.
 - 2026-10-12 — Iteration 0 done. AlDente OSS repo is NOT open source (evaluation licence). Stats is MIT.
