@@ -37,3 +37,28 @@ func hidTemp(_ s: AnyObject) -> Double {
 }
 measure("IOHID read 1 sensor", iterations: 2000) { _ = hidTemp(services[0]) }
 measure("IOHID read all sensors", iterations: 100) { for s in services { _ = hidTemp(s) } }
+
+// MARK: CPU
+let topo = CPUTopology.current()
+print("Topology: \(topo.performanceCount)P + \(topo.efficiencyCount)E  \(topo.kinds.map { String($0.rawValue) }.joined())")
+let cpuTotal = CPUSampler(topology: topo)
+measure("CPU totals (HOST_CPU_LOAD_INFO)", iterations: 5000) { cpuTotal.sample(tick: 0) }
+let cpuCores = CPUSampler(topology: topo)
+cpuCores.setPerCore(true)
+measure("CPU per-core (host_processor_info)", iterations: 5000) { cpuCores.sample(tick: 0) }
+Thread.sleep(forTimeInterval: 0.5)
+cpuCores.sample(tick: 0)
+let l = cpuCores.latest
+print(String(format: "  live: total %.1f%%  P %.1f%%  E %.1f%%", l.total * 100, (l.performance ?? 0) * 100, (l.efficiency ?? 0) * 100))
+let probe = CPUSampler(topology: topo)
+probe.sample(tick: 0)
+Thread.sleep(forTimeInterval: 0.5)
+probe.sample(tick: 0)
+print(String(format: "  probe totals-only after 0.5s: total %.1f%% user %.1f%% sys %.1f%%", probe.latest.total * 100, probe.latest.user * 100, probe.latest.system * 100))
+let probe2 = CPUSampler(topology: topo)
+probe2.setPerCore(true)
+probe2.sample(tick: 0)
+Thread.sleep(forTimeInterval: 0.5)
+probe2.sample(tick: 0)
+let p2 = probe2.latest
+print(String(format: "  probe2 per-core after 0.5s: total %.1f%% user %.1f%% cores %d P %.1f%%", p2.total * 100, p2.user * 100, p2.perCore.count, (p2.performance ?? -1) * 100))

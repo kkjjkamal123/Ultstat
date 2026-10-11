@@ -27,12 +27,12 @@ CHTE, CHIE (new firmware) · CH0B, CH0C, CH0I (old firmware) · CHWA · ACLC (Ma
 - SMC read = 100–175 µs per key (coprocessor round trip). IOHID thermal read = ~757 µs per sensor; all 47 IOHID sensors = 45.6 ms. Stats uses IOHID on Apple Silicon, so Ultstat uses SMC with demand-driven, round-robin subsets.
 - M5 SMC: 2429 keys. Integers/floats little-endian (B0CT=11 cycles, B0DC=5760 mAh, B0AC=-631 mA); `#KEY` and sp/fp fixed-point are big-endian. Writable bit = attr & 0x40.
 - Temperature families: Tp** Super cores (14), Te** E-cores (4), Tg** GPU (22), Ts** SoC, Ta** ?, TB0T–TB2T battery, TH0x SSD, TW0P Wi-Fi, Tm0B memory. No fans (F*=0). Power: PSTR system total, PDTR DC-in, PPBR battery rail.
-- Charge keys on M5/macOS 27: CHTE, CH0B, CH0C, CH0I, CHWA, BCLM all ABSENT. Writable: CHIE (hex_, was 0x08 while AlDente force-discharged), ACLC, ACDL, CBSC, CBSV, CBTC, MSLD, LPMS. Need AlDente decompile to confirm the inhibit mechanism.
+- Charge control: see docs/charging-control.md (three generations; macOS 27 uses the native MCL limit).
 - Decision: Apple Silicon only (arm64). macOS 26+.
 
 ## Iteration plan
 - [x] 0. Recon: references cloned, skills vetted and installed, tooling (xcodegen, swiftlint, swiftformat, JDK 21, Ghidra)
-- [ ] 1. RE AlDente charge-control decision logic (Ghidra via REA); probe M5 SMC key table read-only
+- [x] 1. RE AlDente charge-control logic → docs/charging-control.md. macOS 27: native MCL limit via root prefs + Darwin notify; discharge via CHIE=0x08. Open: <80 % limits, sailing/heat/calibration logic details.
 - [ ] 2. Project skeleton (XcodeGen): app, helper, core package, tests; CI lint/format
 - [ ] 3. SMC client + key enumeration + sensor discovery for M5
 - [ ] 4. Scheduler + demand model + ring buffers; power baseline harness (powermetrics script)
@@ -49,4 +49,5 @@ CHTE, CHIE (new firmware) · CH0B, CH0C, CH0I (old firmware) · CHWA · ACLC (Ma
 - [ ] 15+. Audit/fix iterations (≥15 total), release packaging (DMG, notarization when Developer ID is available), README, LICENSE, CONTRIBUTING
 
 ## Iteration log
+- 2026-10-12 — Iteration 1: SMC/IOHID benchmarks, CPU sampler (xnu host_statistics rate-limit found and handled), AlDente charge-control RE complete. 15 tests passing.
 - 2026-10-12 — Iteration 0 done. AlDente OSS repo is NOT open source (evaluation licence). Stats is MIT.
