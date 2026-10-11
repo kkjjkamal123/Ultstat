@@ -119,3 +119,13 @@ if let batt = BatteryMonitor() {
         if let a = b.adapter { print("  adapter: \(a.name ?? "?") \(a.watts ?? 0) W") }
     }
 }
+
+// MARK: Processes
+let procs = ProcessSampler()
+procs.sample(tick: 0)
+Thread.sleep(forTimeInterval: 1)
+measure("Processes (libproc, all pids)", iterations: 50) { procs.sample(tick: 0) }
+Thread.sleep(forTimeInterval: 1)
+procs.sample(tick: 0)
+for p in procs.topByCPU.prefix(5) { print(String(format: "  cpu   %-22@ %6.1f%%  %7.1f MB  %6.3f W", p.name as NSString, p.cpu * 100, Double(p.memory) / 1e6, p.watts)) }
+for p in procs.topByPower.prefix(3) { print(String(format: "  power %-22@ %6.3f W", p.name as NSString, p.watts)) }

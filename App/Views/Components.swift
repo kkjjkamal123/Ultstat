@@ -1,10 +1,32 @@
+import AppKit
 import SwiftUI
+
+/// Chart colours, validated with the dataviz skill's checker against the popover surfaces
+/// (light #efefef, dark #242424; all-pairs CVD ΔE ≥ 12.6, normal-vision ΔE ≥ 21.9, ≥ 3:1 contrast).
+/// Slot order is fixed: a series keeps its colour wherever it appears.
+enum Theme {
+    static let series1 = adaptive(light: 0x009A86, dark: 0x10AD92)   // teal (brand)
+    static let series2 = adaptive(light: 0xD9681C, dark: 0xDC6A22)   // amber
+    static let series3 = adaptive(light: 0x6250D6, dark: 0x9085E9)   // violet
+    /// Reserved status colours; always paired with an icon or label, never used for series.
+    static let warning = adaptive(light: 0xB27600, dark: 0xE0A000)
+    static let critical = adaptive(light: 0xD33A3A, dark: 0xE66767)
+
+    private static func adaptive(light: UInt32, dark: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let hex = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: CGFloat(hex >> 16 & 0xFF) / 255, green: CGFloat(hex >> 8 & 0xFF) / 255,
+                           blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        })
+    }
+}
 
 /// Minimal line chart. One `Canvas` draw per update; no per-point views or layout.
 struct Sparkline: View {
     var values: [Float]
     var maxValue: Float? = nil
-    var tint: Color = .accentColor
+    var tint: Color = Theme.series1
+    var filled = true
 
     var body: some View {
         Canvas { ctx, size in
@@ -20,9 +42,11 @@ struct Sparkline: View {
             fill.addLine(to: CGPoint(x: size.width, y: size.height))
             fill.addLine(to: CGPoint(x: 0, y: size.height))
             fill.closeSubpath()
-            ctx.fill(fill, with: .linearGradient(Gradient(colors: [tint.opacity(0.28), tint.opacity(0.02)]),
-                                                 startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
-            ctx.stroke(line, with: .color(tint), style: StrokeStyle(lineWidth: 1.4, lineCap: .round, lineJoin: .round))
+            if filled {
+                ctx.fill(fill, with: .linearGradient(Gradient(colors: [tint.opacity(0.22), tint.opacity(0.0)]),
+                                                     startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+            }
+            ctx.stroke(line, with: .color(tint), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
         }
         .accessibilityHidden(true)
     }
@@ -31,13 +55,13 @@ struct Sparkline: View {
 /// Horizontal capsule meter.
 struct Meter: View {
     var value: Float
-    var tint: Color = .accentColor
+    var tint: Color = Theme.series1
 
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(.quaternary)
-                Capsule().fill(tint.gradient)
+                Capsule().fill(tint)
                     .frame(width: max(3, geo.size.width * CGFloat(min(max(value, 0), 1))))
             }
         }
@@ -53,10 +77,10 @@ struct StackedMeter: View {
 
     var body: some View {
         GeometryReader { geo in
-            HStack(spacing: 1) {
+            HStack(spacing: 2) {
                 ForEach(Array(parts.enumerated()), id: \.offset) { _, part in
-                    Rectangle().fill(part.1.gradient)
-                        .frame(width: max(0, geo.size.width * CGFloat(min(max(part.0, 0), 1)) - 1))
+                    Rectangle().fill(part.1)
+                        .frame(width: max(0, geo.size.width * CGFloat(min(max(part.0, 0), 1)) - 2))
                 }
                 Spacer(minLength: 0)
             }
@@ -72,7 +96,9 @@ struct MetricCard<Content: View>: View {
     var title: String
     var symbol: String
     var value: String
-    var tint: Color = .accentColor
+    /// Identity mark shown beside the title. Text never takes the series colour.
+    var tint: Color? = nil
+    var status: Color? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -84,16 +110,38 @@ struct MetricCard<Content: View>: View {
                     .foregroundStyle(.secondary)
                     .symbolRenderingMode(.hierarchical)
                 Spacer()
+                if let status {
+                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(status)
+                }
                 Text(value)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .foregroundStyle(tint)
+                    .foregroundStyle(.primary)
             }
             content
         }
         .padding(11)
-        .background(.background.opacity(0.35), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// Legend for charts with two or more series: colour dot + label, never colour alone.
+struct Legend: View {
+    var items: [(String, Color)]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                HStack(spacing: 3) {
+                    Circle().fill(item.1).frame(width: 6, height: 6)
+                    Text(item.0).font(.system(size: 10)).foregroundStyle(.secondary)
+                        .lineLimit(1).fixedSize()
+                }
+            }
+            Spacer(minLength: 0)
+        }
         .accessibilityElement(children: .combine)
     }
 }

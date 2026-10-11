@@ -20,6 +20,7 @@ struct DashboardView: View {
                     diskCard(r)
                     if !r.sensors.isEmpty { sensorsCard(r) }
                     if let b = r.battery { BatteryCard(b: b, systemPower: r.systemPower) }
+                    ProcessesCard()
                 }
                 .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: r)
             }
@@ -31,11 +32,10 @@ struct DashboardView: View {
     }
 
     private var header: some View {
-        HStack {
+        HStack(spacing: 6) {
             Text("Ultstat").font(.system(size: 13, weight: .bold, design: .rounded))
             Spacer()
-            Text(Host.current().localizedName ?? "")
-                .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            SystemStatePill()
         }
         .padding(.horizontal, 2)
     }
@@ -44,6 +44,9 @@ struct DashboardView: View {
         HStack {
             Button("Settings", systemImage: "gearshape") { model.openSettings() }
                 .accessibilityIdentifier("dashboard.settings")
+            Spacer()
+            Text(Host.current().localizedName ?? "")
+                .font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
             Spacer()
             Button("Quit", systemImage: "power") { NSApp.terminate(nil) }
                 .accessibilityIdentifier("dashboard.quit")
@@ -58,20 +61,22 @@ struct DashboardView: View {
 
     private func cpuCard(_ r: Readings) -> some View {
         let c = r.cpu ?? .zero
-        return MetricCard(title: "CPU", symbol: "cpu", value: MetricFormat.percent(c.total), tint: .blue) {
-            Sparkline(values: model.cpuHistory, maxValue: 1, tint: .blue).frame(height: 36)
+        let kinds = model.hub.cpu.topology.kinds
+        return MetricCard(title: "CPU", symbol: "cpu", value: MetricFormat.percent(c.total)) {
+            Sparkline(values: model.cpuHistory, maxValue: 1).frame(height: 34)
             if !c.perCore.isEmpty {
                 HStack(alignment: .bottom, spacing: 2) {
                     ForEach(Array(c.perCore.enumerated()), id: \.offset) { i, v in
-                        let perf = i < model.hub.cpu.topology.kinds.count && model.hub.cpu.topology.kinds[i] == .performance
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill((perf ? Color.blue : Color.teal).gradient)
+                        let perf = i < kinds.count && kinds[i] == .performance
+                        UnevenRoundedRectangle(topLeadingRadius: 2, topTrailingRadius: 2)
+                            .fill(perf ? Theme.series1 : Theme.series2)
                             .frame(height: max(2, 22 * CGFloat(v)))
                             .frame(maxHeight: 22, alignment: .bottom)
                     }
                 }
                 .frame(height: 22)
                 .accessibilityLabel("Per-core load")
+                Legend(items: [(CPUTopology.performanceName, Theme.series1), (CPUTopology.efficiencyName, Theme.series2)])
             }
             HStack(spacing: 12) {
                 StatRow(label: "User", value: MetricFormat.percent(c.user))
@@ -79,8 +84,8 @@ struct DashboardView: View {
             }
             if let p = c.performance, let e = c.efficiency {
                 HStack(spacing: 12) {
-                    StatRow(label: "P-cores", value: MetricFormat.percent(p))
-                    StatRow(label: "E-cores", value: MetricFormat.percent(e))
+                    StatRow(label: CPUTopology.performanceName, value: MetricFormat.percent(p))
+                    StatRow(label: CPUTopology.efficiencyName, value: MetricFormat.percent(e))
                 }
             }
         }
@@ -88,10 +93,16 @@ struct DashboardView: View {
 
     private func memoryCard(_ r: Readings) -> some View {
         let m = r.memory
-        return MetricCard(title: "Memory", symbol: "memorychip", value: m.map { MetricFormat.percent($0.usedFraction) } ?? "–", tint: .purple) {
+        let pressureStatus: Color? = switch m?.pressure {
+        case .warning: Theme.warning
+        case .critical: Theme.critical
+        default: nil
+        }
+        return MetricCard(title: "Memory", symbol: "memorychip", value: m.map { MetricFormat.percent($0.usedFraction) } ?? "–", status: pressureStatus) {
             if let m {
                 let t = Float(max(m.total, 1))
-                StackedMeter(parts: [(Float(m.app) / t, .purple), (Float(m.wired) / t, .orange), (Float(m.compressed) / t, .pink)])
+                StackedMeter(parts: [(Float(m.app) / t, Theme.series1), (Float(m.wired) / t, Theme.series2), (Float(m.compressed) / t, Theme.series3)])
+                Legend(items: [("App", Theme.series1), ("Wired", Theme.series2), ("Compr.", Theme.series3)])
                 StatRow(label: "Used", value: ByteFormat.size(m.used))
                 StatRow(label: "Swap", value: ByteFormat.size(m.swapUsed))
                 StatRow(label: "Pressure", value: m.pressure == .normal ? "Normal" : m.pressure == .warning ? "Warning" : "Critical")
@@ -100,20 +111,25 @@ struct DashboardView: View {
     }
 
     private func gpuCard(_ r: Readings) -> some View {
-        MetricCard(title: "GPU", symbol: "rectangle.3.group", value: r.gpu.map { MetricFormat.percent($0.utilization) } ?? "–", tint: .green) {
-            Sparkline(values: model.gpuHistory, maxValue: 1, tint: .green).frame(height: 30)
+        MetricCard(title: "GPU", symbol: "rectangle.3.group", value: r.gpu.map { MetricFormat.percent($0.utilization) } ?? "–") {
+            Sparkline(values: model.gpuHistory, maxValue: 1).frame(height: 30)
             if let rnd = r.gpu?.renderer { StatRow(label: "Renderer", value: MetricFormat.percent(rnd)) }
+            if let t = r.gpu?.tiler { StatRow(label: "Tiler", value: MetricFormat.percent(t)) }
         }
     }
 
     private func networkCard(_ r: Readings) -> some View {
         let n = r.network
-        return MetricCard(title: "Network", symbol: "arrow.up.arrow.down", value: n.map { "↓ " + ByteFormat.rate($0.download) } ?? "–", tint: .cyan) {
+        let down = model.downloadHistory, up = model.uploadHistory
+        // One scale for both series, so a bigger rate always draws higher.
+        let top = max(down.max() ?? 0, up.max() ?? 0, 1_000)
+        return MetricCard(title: "Network", symbol: "arrow.up.arrow.down", value: n.map { "↓ " + ByteFormat.rate($0.download) } ?? "–") {
             ZStack {
-                Sparkline(values: model.downloadHistory, tint: .cyan)
-                Sparkline(values: model.uploadHistory, tint: .orange)
+                Sparkline(values: down, maxValue: top, tint: Theme.series1)
+                Sparkline(values: up, maxValue: top, tint: Theme.series2, filled: false)
             }
             .frame(height: 32)
+            Legend(items: [("Download", Theme.series1), ("Upload", Theme.series2)])
             if let n {
                 HStack(spacing: 12) {
                     StatRow(label: "Upload", value: ByteFormat.rate(n.upload))
@@ -125,9 +141,11 @@ struct DashboardView: View {
 
     private func diskCard(_ r: Readings) -> some View {
         let d = r.disk
-        return MetricCard(title: "Disk", symbol: "internaldrive", value: d.map { MetricFormat.percent($0.usedFraction) } ?? "–", tint: .indigo) {
+        let full = (d?.usedFraction ?? 0) > 0.9
+        return MetricCard(title: "Disk", symbol: "internaldrive", value: d.map { MetricFormat.percent($0.usedFraction) } ?? "–",
+                          status: full ? Theme.warning : nil) {
             if let d {
-                Meter(value: d.usedFraction, tint: .indigo)
+                Meter(value: d.usedFraction, tint: full ? Theme.warning : Theme.series1)
                 HStack(spacing: 12) {
                     StatRow(label: "Read", value: ByteFormat.rate(d.read))
                     StatRow(label: "Write", value: ByteFormat.rate(d.write))
@@ -140,12 +158,49 @@ struct DashboardView: View {
     private func sensorsCard(_ r: Readings) -> some View {
         let unit = model.settings.stored.temperatureUnit
         let hottest = r.sensors.values.map(\.max).max() ?? 0
-        return MetricCard(title: "Temperatures", symbol: "thermometer.medium", value: unit.format(hottest), tint: hottest > 85 ? .red : .orange) {
+        let status: Color? = hottest >= 95 ? Theme.critical : hottest >= 85 ? Theme.warning : nil
+        return MetricCard(title: "Temperatures", symbol: "thermometer.medium", value: unit.format(hottest), status: status) {
+            Sparkline(values: model.temperatureHistory(.cpuPerformance), maxValue: 110).frame(height: 26)
             ForEach(r.sensors.keys.sorted(), id: \.self) { g in
                 if let v = r.sensors[g] {
-                    StatRow(label: g.displayName, value: "\(unit.format(v.max))  avg \(unit.format(v.average))")
+                    StatRow(label: g == .cpuPerformance ? "CPU \(CPUTopology.performanceName)" : g == .cpuEfficiency ? "CPU \(CPUTopology.efficiencyName)" : g.displayName,
+                            value: "\(unit.format(v.max))  avg \(unit.format(v.average))")
                 }
             }
+        }
+    }
+}
+
+/// Thermal pressure and Low Power Mode, read from ProcessInfo (no sampling).
+struct SystemStatePill: View {
+    @State private var thermal = ProcessInfo.processInfo.thermalState
+    @State private var lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if lowPower {
+                Label("Low Power", systemImage: "leaf.fill").foregroundStyle(Theme.warning)
+            }
+            Label(thermalText, systemImage: "thermometer.variable")
+                .foregroundStyle(thermal == .nominal ? AnyShapeStyle(.secondary) : AnyShapeStyle(thermal == .critical ? Theme.critical : Theme.warning))
+        }
+        .font(.system(size: 10, weight: .medium))
+        .labelStyle(.titleAndIcon)
+        .onReceive(NotificationCenter.default.publisher(for: ProcessInfo.thermalStateDidChangeNotification)) { _ in
+            thermal = ProcessInfo.processInfo.thermalState
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSProcessInfoPowerStateDidChange)) { _ in
+            lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
+        }
+    }
+
+    private var thermalText: String {
+        switch thermal {
+        case .nominal: "Thermal: Nominal"
+        case .fair: "Thermal: Fair"
+        case .serious: "Thermal: Serious"
+        case .critical: "Thermal: Critical"
+        @unknown default: "Thermal"
         }
     }
 }
@@ -156,8 +211,9 @@ struct BatteryCard: View {
     var systemPower: Double?
 
     var body: some View {
-        MetricCard(title: "Battery", symbol: MenuBarRenderer.batterySymbol(b), value: "\(b.percent)%", tint: b.percent <= 20 ? .red : .green) {
-            Meter(value: Float(b.percent) / 100, tint: b.percent <= 20 ? .red : .green)
+        let status: Color? = b.externalConnected ? nil : b.percent <= 10 ? Theme.critical : b.percent <= 20 ? Theme.warning : nil
+        MetricCard(title: "Battery", symbol: MenuBarRenderer.batterySymbol(b), value: "\(b.percent)%", status: status) {
+            Meter(value: Float(b.percent) / 100, tint: status ?? Theme.series1)
             if let f = b.flow { PowerFlowView(flow: f) }
             StatRow(label: "State", value: stateText)
             if let hw = b.hardwarePercent { StatRow(label: "Gauge charge", value: String(format: "%.1f%%", hw)) }
@@ -218,7 +274,7 @@ struct PowerFlowView: View {
     private func arrow(active: Bool, pointsLeft: Bool = false) -> some View {
         Image(systemName: pointsLeft ? "arrow.left" : "arrow.right")
             .font(.system(size: 10, weight: .bold))
-            .foregroundStyle(active ? Color.accentColor : Color.secondary.opacity(0.3))
+            .foregroundStyle(active ? Theme.series1 : Color.secondary.opacity(0.3))
     }
 }
 
@@ -245,6 +301,53 @@ struct ChargeLimitQuickControl: View {
                     .disabled(!enabled)
                     .accessibilityIdentifier("battery.limitStepper")
             }
+        }
+    }
+}
+
+/// Top processes by CPU, memory or measured power. Data exists only while the popover is open.
+struct ProcessesCard: View {
+    @Environment(AppModel.self) private var model
+    @State private var order: Order = .cpu
+
+    enum Order: String, CaseIterable, Identifiable {
+        case cpu = "CPU", memory = "Memory", power = "Power"
+        var id: String { rawValue }
+    }
+
+    var body: some View {
+        let _ = model.readings.processes   // refresh with each tick
+        let rows: [ProcessUsage] = switch order {
+        case .cpu: model.hub.processes.topByCPU
+        case .memory: model.hub.processes.topByMemory
+        case .power: model.hub.processes.topByPower
+        }
+        MetricCard(title: "Processes", symbol: "list.bullet.rectangle", value: "") {
+            Picker("Order", selection: $order) {
+                ForEach(Order.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .accessibilityIdentifier("processes.order")
+            if rows.isEmpty {
+                Text("Measuring…").font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            ForEach(rows.prefix(6)) { p in
+                StatRow(label: p.name, value: value(p))
+            }
+            if order == .power {
+                Text("Measured energy of your apps; system processes are not visible without root.")
+                    .font(.system(size: 9)).foregroundStyle(.tertiary)
+            }
+        }
+    }
+
+    private func value(_ p: ProcessUsage) -> String {
+        switch order {
+        case .cpu: String(format: "%.1f%%", p.cpu * 100)
+        case .memory: ByteFormat.size(p.memory)
+        case .power: p.watts < 0.1 ? String(format: "%.0f mW", p.watts * 1000) : String(format: "%.2f W", p.watts)
         }
     }
 }

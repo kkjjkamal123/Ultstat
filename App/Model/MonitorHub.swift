@@ -16,6 +16,7 @@ final class MonitorHub {
     let gpu: GPUSampler?
     let sensors: SensorSampler?
     let battery: BatteryMonitor?
+    let processes: ProcessSampler
     private let power: PowerSampler?
     private let smc: SMC?
 
@@ -43,6 +44,7 @@ final class MonitorHub {
             sensors = nil
             power = nil
         }
+        processes = ProcessSampler { v in bus.update { $0.processes = v } }
         battery = BatteryMonitor { v in bus.update { $0.battery = v } }
         battery?.start()
         observeSystemState()
@@ -65,6 +67,7 @@ final class MonitorHub {
         if visible {
             detailTokens = MenuBarItem.allCases.flatMap { tokens(for: $0) }
             if let battery { detailTokens.append(scheduler.demand(battery)) }
+            detailTokens.append(scheduler.demand(processes))
         } else {
             detailTokens = []
         }

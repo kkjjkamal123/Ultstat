@@ -64,3 +64,25 @@ import Testing
         #expect((0...1).contains(l.utilization))
     }
 }
+
+@Suite struct ProcessSamplerTests {
+    @Test func reportsOwnProcessWithSaneValues() async throws {
+        let s = ProcessSampler(limit: 500)
+        s.sample(tick: 0)
+        #expect(s.topByCPU.isEmpty, "first sample is only a baseline")
+        // Burn ~50 ms of CPU so this process has measurable usage.
+        let end = ContinuousClock.now + .milliseconds(50)
+        var x = 0.0
+        while ContinuousClock.now < end { x += sin(x) }
+        try await Task.sleep(for: .milliseconds(200))
+        s.sample(tick: 1)
+        let me = try #require(s.topByMemory.first { $0.pid == getpid() } ?? s.topByCPU.first { $0.pid == getpid() })
+        #expect(me.memory > 1_000_000)
+        #expect(me.cpu >= 0 && me.cpu < Double(ProcessInfo.processInfo.processorCount) + 0.5)
+        #expect(me.watts >= 0 && me.watts < 100)
+        #expect(!me.name.isEmpty)
+        #expect(s.topByCPU.count <= 500)
+        #expect(zip(s.topByCPU, s.topByCPU.dropFirst()).allSatisfy { $0.cpu >= $1.cpu }, "sorted descending")
+        _ = x
+    }
+}

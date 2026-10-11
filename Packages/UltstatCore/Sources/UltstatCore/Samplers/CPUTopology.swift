@@ -13,6 +13,10 @@ public struct CPUTopology: Sendable, Equatable {
 
     public init(kinds: [Kind]) { self.kinds = kinds }
 
+    /// The chip's own name for its performance cluster ("Super" on M5, "Performance" before).
+    public static let performanceName: String = sysctlString("hw.perflevel0.name") ?? "Performance"
+    public static let efficiencyName: String = sysctlString("hw.perflevel1.name") ?? "Efficiency"
+
     public var performanceCount: Int { kinds.lazy.filter { $0 == .performance }.count }
     public var efficiencyCount: Int { kinds.lazy.filter { $0 == .efficiency }.count }
 

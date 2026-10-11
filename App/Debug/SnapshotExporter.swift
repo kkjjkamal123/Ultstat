@@ -52,7 +52,9 @@ enum SnapshotExporter {
     }
 
     private static func writeView<V: View>(_ view: V, size: NSSize, appearance: NSAppearance.Name, to url: URL) {
-        let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height))
+        let dark = appearance == .darkAqua
+        let backdrop = dark ? Color(white: 0.14) : Color(white: 0.94)   // approximates the popover material
+        let host = NSHostingView(rootView: view.frame(width: size.width, height: size.height).background(backdrop))
         host.frame = NSRect(origin: .zero, size: size)
         host.appearance = NSAppearance(named: appearance)
         let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)

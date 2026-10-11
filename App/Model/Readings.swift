@@ -12,6 +12,7 @@ struct Readings: Equatable, Sendable {
     var sensors: [SensorGroup: GroupReading] = [:]
     var battery: BatterySnapshot?
     var systemPower: Double?          // W, from SMC PSTR
+    var processes: [ProcessUsage] = []  // top by CPU; other orderings read from the sampler
 }
 
 /// Collects sampler callbacks (scheduler queue) and publishes them to the main actor at most
