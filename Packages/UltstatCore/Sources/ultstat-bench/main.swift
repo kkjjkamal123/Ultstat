@@ -80,3 +80,42 @@ if let gpu = GPUSampler() {
     measure("GPU (PerformanceStatistics)", iterations: 2000) { gpu.sample(tick: 0) }
     if let g = gpu.latest { print(String(format: "  live: device %.1f%% renderer %.1f%%", g.utilization * 100, (g.renderer ?? 0) * 100)) }
 }
+
+// MARK: Sensors
+let catURL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("ultstat-bench-catalog.plist")
+try? FileManager.default.removeItem(at: catURL)
+var catalog: SensorCatalog!
+measure("Sensor discovery (cold, full SMC walk)", iterations: 1) { catalog = SensorCatalog.load(smc: smc, cacheURL: catURL) }
+measure("Sensor catalog (warm, from cache)", iterations: 20) { _ = SensorCatalog.load(smc: smc, cacheURL: catURL) }
+let groups = Dictionary(grouping: catalog.temperatures, by: \.group).mapValues(\.count)
+print("  groups:", groups.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " "), " power keys:", catalog.power.count, " fans:", catalog.fans)
+let sensors = SensorSampler(smc: smc, catalog: catalog)
+sensors.setEnabled([.cpuPerformance, .cpuEfficiency, .gpu, .battery])
+sensors.sample(tick: 0) // priming sweep
+measure("Sensors steady tick (4 groups x3 keys)", iterations: 200) { sensors.sample(tick: 0) }
+for (g, r) in sensors.latest.sorted(by: { $0.key < $1.key }) { print(String(format: "  %-16@ max %.1f°C avg %.1f°C", g.displayName as NSString, r.max, r.average)) }
+
+// MARK: CPU time vs wall time for SMC reads
+func threadCPUNanos() -> UInt64 { clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) }
+do {
+    let n = 500
+    let wall0 = clock_gettime_nsec_np(CLOCK_UPTIME_RAW), cpu0 = threadCPUNanos()
+    for _ in 0..<n { _ = smc.double("Tp00") }
+    let wall = Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - wall0) / Double(n) / 1000
+    let cpu = Double(threadCPUNanos() - cpu0) / Double(n) / 1000
+    print(String(format: "SMC read: wall %.1f µs, thread CPU %.1f µs (%.0f%% of wall is CPU)", wall, cpu, cpu / wall * 100))
+}
+
+// MARK: Battery
+if let batt = BatteryMonitor() {
+    measure("Battery full snapshot (event path)", iterations: 500) { _ = batt.read() }
+    batt.refresh()
+    measure("Battery power-flow tick", iterations: 2000) { batt.sample(tick: 0) }
+    if let b = batt.latest {
+        print(String(format: "  %d%% (gauge %.1f%%), %@, %d cycles, health %.1f%%, %.2f W", b.percent, b.hardwarePercent ?? -1,
+                     b.isCharging ? "charging" : (b.externalConnected ? "on adapter, not charging" : "on battery"),
+                     b.cycleCount, (b.health ?? 0) * 100, b.watts))
+        if let f = b.flow { print("  flow: adapter \(f.adapterIn) mW -> system \(f.systemLoad) mW, battery \(f.battery) mW, loss \(f.adapterLoss) mW") }
+        if let a = b.adapter { print("  adapter: \(a.name ?? "?") \(a.watts ?? 0) W") }
+    }
+}
