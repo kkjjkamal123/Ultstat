@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.statusItem = StatusItemController(model: model)
         model.openSettingsAction = { [weak self] in self?.showSettings() }
         SnapshotExporter.scheduleIfRequested(model: model)
+        if let item = model.statusItem { StressTester.runIfRequested(statusItem: item) }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

@@ -292,7 +292,7 @@ struct PowerFlowView: View {
     private func node(_ symbol: String, _ value: String, active: Bool) -> some View {
         VStack(spacing: 2) {
             Image(systemName: symbol).font(.system(size: 14)).symbolRenderingMode(.hierarchical)
-            Text(value).font(.system(size: 10, weight: .medium)).monospacedDigit().contentTransition(.numericText())
+            Text(value).font(.system(size: 10, weight: .medium)).monospacedDigit()
         }
         .foregroundStyle(active ? .primary : .tertiary)
         .frame(maxWidth: .infinity)

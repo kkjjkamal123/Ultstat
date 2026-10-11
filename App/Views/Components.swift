@@ -114,10 +114,13 @@ struct MetricCard<Content: View>: View {
                 if let status {
                     Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(status)
                 }
+                // No `.contentTransition(.numericText())`: it rasterises digits at many intermediate
+                // scales, and CoreGraphics caches every glyph bitmap. Measured: +0.75 MB retained per
+                // popover open (60 opens: 91 MB vs 42 MB without). Monospaced digits update in place.
                 Text(value)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .contentTransition(.numericText())
+                    
                     .foregroundStyle(.primary)
             }
             content
