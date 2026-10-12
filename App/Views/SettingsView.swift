@@ -3,14 +3,18 @@ import UltstatCore
 import UltstatKit
 
 struct SettingsView: View {
+    @State private var tab = 0
+
     var body: some View {
-        TabView {
-            Tab("General", systemImage: "gearshape") { GeneralSettings() }
-            Tab("Menu Bar", systemImage: "menubar.rectangle") { MenuBarSettings() }
-            Tab("Battery", systemImage: "battery.75percent") { BatterySettings() }
-            Tab("About", systemImage: "info.circle") { AboutSettings() }
+        TabView(selection: $tab) {
+            Tab("General", systemImage: "gearshape", value: 0) { GeneralSettings() }
+            Tab("Menu Bar", systemImage: "menubar.rectangle", value: 1) { MenuBarSettings() }
+            Tab("Battery", systemImage: "battery.75percent", value: 2) { BatterySettings() }
+            Tab("About", systemImage: "info.circle", value: 3) { AboutSettings() }
         }
         .frame(width: 520, height: 460)
+        .onAppear { SettingsTabDriver.select = { tab = $0 } }
+        .onDisappear { SettingsTabDriver.select = nil }
     }
 }
 

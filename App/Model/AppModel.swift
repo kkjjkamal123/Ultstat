@@ -72,7 +72,6 @@ final class AppModel {
     }
 
     func openSettings() {
-        NSApp.activate()
         openSettingsAction?()
     }
 

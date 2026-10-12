@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1042D503201ECFD6303FE9EC /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 048631DDF96E16E02F98C2A4 /* SettingsView.swift */; };
+		1699BAD1931C69A9D1F333B2 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F38B97B528FCD7D7838106F /* SettingsWindowController.swift */; };
 		20CCADD7B5BE61D44DBA76B9 /* StressTester.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D4C97BEEAE035216789EF1 /* StressTester.swift */; };
 		286D38501786DDA8C6E7FAE3 /* UltstatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 514CDD3C25D0D5440C64910A /* UltstatCore */; };
 		2C36C2BADD97C4961FE62D52 /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC92AE558E76F41EDC32F9E1 /* Components.swift */; };
@@ -71,6 +72,7 @@
 		74B02CD3FE49D7E5D4224588 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		87744FC79CE117DED43FC717 /* UltstatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UltstatUITests.swift; sourceTree = "<group>"; };
 		9D1BD360FF791863A3428125 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		9F38B97B528FCD7D7838106F /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
 		A1790E42B3A6CE599027FE78 /* UltstatUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = UltstatUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A6F4BCF486F59E064C3C7CDA /* UltstatCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = UltstatCore; path = Packages/UltstatCore; sourceTree = SOURCE_ROOT; };
 		A7D4C97BEEAE035216789EF1 /* StressTester.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StressTester.swift; sourceTree = "<group>"; };
@@ -198,6 +200,7 @@
 				BC92AE558E76F41EDC32F9E1 /* Components.swift */,
 				9D1BD360FF791863A3428125 /* DashboardView.swift */,
 				048631DDF96E16E02F98C2A4 /* SettingsView.swift */,
+				9F38B97B528FCD7D7838106F /* SettingsWindowController.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -388,6 +391,7 @@
 				574EDB69846F2CC597655A97 /* HelperProtocol.swift in Sources */,
 				93DCCA9D53D72A0A884393B5 /* MonitorHub.swift in Sources */,
 				1042D503201ECFD6303FE9EC /* SettingsView.swift in Sources */,
+				1699BAD1931C69A9D1F333B2 /* SettingsWindowController.swift in Sources */,
 				E5A41094BC4BBD961A967C69 /* SnapshotExporter.swift in Sources */,
 				319A9F75E96E02C0D75917DE /* StatusItemController.swift in Sources */,
 				20CCADD7B5BE61D44DBA76B9 /* StressTester.swift in Sources */,
