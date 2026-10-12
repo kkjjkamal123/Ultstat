@@ -22,7 +22,7 @@ struct LegendRow: View {
     }
 }
 
-struct ProcessRow {
+struct ProcessRow: Equatable {
     var pid: Int32
     var name: String
     var value: String
@@ -72,17 +72,35 @@ enum ProcessControl {
     }
 }
 
-/// Top-processes table with app icons. Hovering a row you can quit shows an × button; clicking it
-/// asks "Force Quit?" in the row itself (unsaved work is lost), and a second click quits.
+/// Top-processes table with app icons. Hovering a row you can quit shows an ×; clicking it force
+/// quits the process. The hovered row is pinned in place (its value still updates) while the others
+/// keep re-sorting, so the row never moves out from under the pointer.
 struct ProcessTable: View {
     static let rowCount = 8
     var rows: [ProcessRow]
     var valueTitle: String
-    @State private var hovered: Int32?
-    @State private var confirming: Int32?
+
+    private struct Pin: Equatable {
+        var pid: Int32
+        var index: Int
+        var row: ProcessRow
+    }
+
+    @State private var pin: Pin?
     @State private var failed: Int32?
 
+    /// Fresh rows, with the hovered process held at the position it had when the pointer arrived.
+    private var displayed: [ProcessRow] {
+        var list = Array(rows.prefix(Self.rowCount))
+        guard let pin else { return list }
+        let current = rows.first { $0.pid == pin.pid } ?? pin.row
+        list.removeAll { $0.pid == pin.pid }
+        list.insert(current, at: min(pin.index, list.count))
+        return Array(list.prefix(Self.rowCount))
+    }
+
     var body: some View {
+        let shown = displayed
         VStack(spacing: 5) {
             HStack {
                 Text("Process").foregroundStyle(.tertiary)
@@ -90,48 +108,46 @@ struct ProcessTable: View {
                 Text(valueTitle).foregroundStyle(.tertiary)
             }
             .font(.system(size: 11))
-            ForEach(Array(rows.prefix(Self.rowCount).enumerated()), id: \.offset) { _, row in
+            ForEach(Array(shown.enumerated()), id: \.offset) { index, row in
                 let name = ProcessIcons.name(for: row.pid, fallback: row.name)
                 HStack(spacing: 7) {
                     Image(nsImage: ProcessIcons.icon(for: row.pid)).resizable().frame(width: 16, height: 16)
                     Text(name).lineLimit(1).truncationMode(.middle)
                     Spacer(minLength: 8)
-                    if confirming == row.pid {
-                        Button("Force Quit") {
-                            failed = ProcessControl.forceQuit(pid: row.pid) ? nil : row.pid
-                            confirming = nil
+                    if failed == row.pid {
+                        Text("Not allowed").font(.system(size: 10)).foregroundStyle(Theme.critical)
+                    }
+                    Text(row.value).monospacedDigit()
+                    if pin?.pid == row.pid, ProcessControl.canQuit(pid: row.pid, name: row.name) {
+                        Button("Force quit \(name)", systemImage: "xmark.circle.fill") {
+                            if ProcessControl.forceQuit(pid: row.pid) {
+                                failed = nil
+                                pin = nil
+                            } else {
+                                failed = row.pid
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                        .controlSize(.mini)
-                        Button("Cancel") { confirming = nil }
-                            .buttonStyle(.borderless)
-                            .controlSize(.mini)
-                    } else {
-                        if failed == row.pid {
-                            Text("Not allowed").font(.system(size: 10)).foregroundStyle(Theme.critical)
-                        }
-                        Text(row.value).monospacedDigit()
-                        if hovered == row.pid, ProcessControl.canQuit(pid: row.pid, name: row.name) {
-                            Button("Force quit \(name)", systemImage: "xmark.circle.fill") { confirming = row.pid }
-                                .labelStyle(.iconOnly)
-                                .buttonStyle(.borderless)
-                                .foregroundStyle(.secondary)
-                                .help("Force quit \(name)")
-                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .help("Force quit \(name)")
                     }
                 }
                 .font(.system(size: 12))
                 .frame(minHeight: 18)
                 .contentShape(Rectangle())
                 .onHover { inside in
-                    if inside { hovered = row.pid } else if hovered == row.pid { hovered = nil }
+                    if inside {
+                        if pin?.pid != row.pid { pin = Pin(pid: row.pid, index: index, row: row) }
+                    } else if pin?.pid == row.pid {
+                        pin = nil
+                    }
                 }
             }
             // Same height before the first measurement (processes need two samples): the panel is
             // sized once when it opens, so the table must not grow afterwards.
-            ForEach(rows.count..<max(rows.count, Self.rowCount), id: \.self) { i in
-                Text(i == 0 && rows.isEmpty ? "Measuring…" : " ")
+            ForEach(shown.count..<max(shown.count, Self.rowCount), id: \.self) { i in
+                Text(i == 0 && shown.isEmpty ? "Measuring…" : " ")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
             }
