@@ -55,9 +55,9 @@ enum SnapshotExporter {
                 }
             }
         }
-        for (tab, name) in ["general", "menubar", "battery", "alerts", "about"].enumerated() {
-            writeView(SettingsView(initialTab: tab).environment(model), size: NSSize(width: 720, height: 540), appearance: .darkAqua,
-                      to: dir.appendingPathComponent("settings-\(name).png"))
+        for section in SettingsSection.allCases {
+            writeView(SettingsView(initialTab: section.rawValue).environment(model), size: NSSize(width: 1000, height: 700), appearance: .darkAqua,
+                      to: dir.appendingPathComponent("settings-\(section.title.lowercased().replacingOccurrences(of: " ", with: "-")).png"))
         }
     }
 

@@ -10,9 +10,10 @@ struct LegendRow: View {
     var body: some View {
         HStack(spacing: 8) {
             if let color { RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 11, height: 11) }
-            Text(label).foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary).lineLimit(1)
             Spacer(minLength: 8)
-            Text(value).monospacedDigit()
+            // One line always: long values shrink a little rather than wrap mid-number.
+            Text(value).monospacedDigit().lineLimit(1).minimumScaleFactor(0.75)
         }
         .font(.system(size: 12.5))
     }

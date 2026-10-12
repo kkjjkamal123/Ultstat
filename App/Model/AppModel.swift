@@ -143,7 +143,13 @@ final class AppModel {
 
     // MARK: Popover
 
+    /// How many detail views (a menu-bar panel, the Settings dashboard) are showing. Detailed
+    /// sampling, panel readings and helper power run only while this is above zero.
+    @ObservationIgnored private var detailViewers = 0
+
     func popoverOpened() {
+        detailViewers += 1
+        guard detailViewers == 1 else { return }
         panelReadings = readings
         if connectivityMonitor == nil {
             connectivityMonitor = ConnectivityMonitor { [weak self] s in
@@ -157,6 +163,8 @@ final class AppModel {
     }
 
     func popoverClosed() {
+        detailViewers = max(0, detailViewers - 1)
+        guard detailViewers == 0 else { return }
         popoverOpen = false
         hub.setDetailVisible(false)
         helperPowerTask?.cancel()

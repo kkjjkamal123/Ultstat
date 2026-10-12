@@ -24,7 +24,7 @@ enum SelfTest {
             let roles = Dictionary(grouping: all.compactMap { role($0)?.rawValue }, by: { $0 }).mapValues(\.count)
             log.notice("SELFTEST tree elements=\(all.count) roles=\(roles.description, privacy: .public)")
             var passed = 0, failed = 0
-            for tab in 0..<5 {
+            for tab in SettingsSection.allCases.map(\.rawValue) {
                 SettingsTabDriver.select?(tab)
                 try? await Task.sleep(for: .milliseconds(500))
                 for el in elements(in: window) where role(el) == .checkBox {

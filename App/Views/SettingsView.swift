@@ -2,81 +2,139 @@ import SwiftUI
 import UltstatCore
 import UltstatKit
 
+/// Pages of the Ultstat window, grouped in the sidebar like AlDente's. Raw values are stable
+/// (tests and debug drivers select pages by number).
 enum SettingsSection: Int, CaseIterable, Identifiable, Hashable {
-    case general, menuBar, battery, alerts, about
+    case dashboard, chargeControl, alerts, cpu, gpu, memory, network, disk, sensors, power, menuBar, general, about
 
     var id: Int { rawValue }
 
     var title: String {
         switch self {
-        case .general: "General"
-        case .menuBar: "Menu Bar"
-        case .battery: "Battery"
+        case .dashboard: "Dashboard"
+        case .chargeControl: "Charge Control"
         case .alerts: "Alerts"
+        case .menuBar: "Menu Bar"
+        case .general: "General"
         case .about: "About"
+        default: module.map { $0 == .temperature ? "Sensors" : $0.title } ?? ""
+        }
+    }
+
+    /// The monitoring module a page shows, if it is one.
+    var module: MenuBarItem? {
+        switch self {
+        case .cpu: .cpu
+        case .gpu: .gpu
+        case .memory: .memory
+        case .network: .network
+        case .disk: .disk
+        case .sensors: .temperature
+        case .power: .power
+        default: nil
         }
     }
 
     var symbol: String {
         switch self {
-        case .general: "gearshape.fill"
+        case .dashboard: "square.grid.2x2"
+        case .chargeControl: "battery.100percent.bolt"
+        case .alerts: "bell.badge"
         case .menuBar: "menubar.rectangle"
-        case .battery: "battery.75percent"
-        case .alerts: "bell.badge.fill"
-        case .about: "info.circle.fill"
+        case .general: "gearshape"
+        case .about: "info.circle"
+        default: module?.symbol ?? "circle"
         }
     }
 
     var tint: Color {
         switch self {
-        case .general: .gray
-        case .menuBar: .blue
-        case .battery: .green
+        case .dashboard: .blue
+        case .chargeControl: .green
         case .alerts: .red
-        case .about: .indigo
+        case .menuBar: .indigo
+        case .general: .gray
+        case .about: .secondary
+        default: module?.tint ?? .gray
         }
     }
+
+    static let groups: [(String?, [SettingsSection])] = [
+        (nil, [.dashboard]),
+        ("Battery Care", [.chargeControl, .alerts]),
+        ("Monitoring", [.cpu, .gpu, .memory, .network, .disk, .sensors, .power]),
+        ("Appearance", [.menuBar]),
+        ("App", [.general, .about]),
+    ]
 }
 
-/// System Settings-style window: icon sidebar on the left, the selected page on the right.
+/// The Ultstat window: grouped sidebar on the left (AlDente style), the selected page on the right.
 struct SettingsView: View {
     @State private var section: SettingsSection?
 
     init(initialTab: Int = 0) {
-        _section = State(initialValue: SettingsSection(rawValue: initialTab) ?? .general)
+        _section = State(initialValue: SettingsSection(rawValue: initialTab) ?? .dashboard)
     }
 
     var body: some View {
         NavigationSplitView {
-            List(SettingsSection.allCases, selection: $section) { s in
-                HStack(spacing: 9) {
-                    Image(systemName: s.symbol)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 22, height: 22)
-                        .background(s.tint.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    Text(s.title)
+            List(selection: $section) {
+                ForEach(SettingsSection.groups, id: \.1) { title, items in
+                    Section {
+                        ForEach(items) { s in
+                            Label {
+                                Text(s.title)
+                            } icon: {
+                                Image(systemName: s.symbol).foregroundStyle(s.tint)
+                            }
+                            .tag(s)
+                            .accessibilityIdentifier("settings.section.\(s.rawValue)")
+                        }
+                    } header: {
+                        if let title { Text(title) }
+                    }
                 }
-                .tag(s)
-                .accessibilityIdentifier("settings.section.\(s.rawValue)")
             }
             .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 170, ideal: 180, max: 220)
+            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
+            .safeAreaInset(edge: .bottom) { sidebarFooter }
         } detail: {
-            Group {
-                switch section ?? .general {
-                case .general: GeneralSettings()
-                case .menuBar: MenuBarSettings()
-                case .battery: BatterySettings()
-                case .alerts: AlertSettings()
-                case .about: AboutSettings()
-                }
-            }
-            .navigationTitle((section ?? .general).title)
+            page(section ?? .dashboard)
+                .navigationTitle((section ?? .dashboard).title)
         }
-        .frame(minWidth: 700, idealWidth: 720, minHeight: 500, idealHeight: 540)
+        .frame(minWidth: 860, idealWidth: 1000, minHeight: 600, idealHeight: 700)
         .onAppear { SettingsTabDriver.select = { section = SettingsSection(rawValue: $0) } }
         .onDisappear { SettingsTabDriver.select = nil }
+    }
+
+    @ViewBuilder private func page(_ s: SettingsSection) -> some View {
+        switch s {
+        case .dashboard: SettingsDashboard()
+        case .chargeControl: BatterySettings()
+        case .alerts: AlertSettings()
+        case .menuBar: MenuBarSettings()
+        case .general: GeneralSettings()
+        case .about: AboutSettings()
+        default: s.module.map { WindowModulePage(item: $0) }
+        }
+    }
+
+    private var sidebarFooter: some View {
+        HStack {
+            Button("Quit Ultstat", systemImage: "power") { NSApp.terminate(nil) }
+                .help("Quit Ultstat")
+                .accessibilityIdentifier("settings.quit")
+            Spacer()
+            Link(destination: URL(string: "https://github.com/kkjjkamal23/Ultstat")!) {
+                Image(systemName: "questionmark")
+            }
+            .help("Help and source code")
+        }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.large)
+        .padding(14)
     }
 }
 

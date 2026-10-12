@@ -27,19 +27,19 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // activate a menu-bar app (cooperative activation), and a plain window then never takes
         // focus, so clicks only tried to activate the app and never reached the controls.
         let w = SettingsPanel(contentViewController: host)
-        w.title = "Ultstat Settings"
+        w.title = "Ultstat"
         w.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .nonactivatingPanel]
         w.titlebarAppearsTransparent = true
         w.toolbarStyle = .unified
-        w.setContentSize(NSSize(width: 720, height: 540))
+        w.setContentSize(NSSize(width: 1000, height: 700))
         w.becomesKeyOnlyIfNeeded = false
         w.isFloatingPanel = false
         w.hidesOnDeactivate = false
         w.isReleasedWhenClosed = false
         w.delegate = self
         w.identifier = NSUserInterfaceItemIdentifier("ultstat.settings")
-        w.setFrameAutosaveName("UltstatSettings")
-        if !w.setFrameUsingName("UltstatSettings") { w.center() }
+        w.setFrameAutosaveName("UltstatWindow")
+        if !w.setFrameUsingName("UltstatWindow") { w.center() }
         window = w
         NSApp.activate()
         w.makeKeyAndOrderFront(nil)
