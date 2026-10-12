@@ -723,9 +723,12 @@ struct CoreBars: View {
 
     var body: some View {
         VStack(spacing: 5) {
+            // Stats' layout: a 50 pt box with a faint background and 2 pt inset around the columns.
             BarsLayer(values: load.perCore,
                       colors: load.perCore.indices.map { $0 < kinds.count && kinds[$0] == .performance ? Theme.series1 : Theme.series2 })
-                .frame(height: 44)
+                .frame(height: 46)
+                .padding(2)
+                .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             Legend(items: [(CPUTopology.performanceName, Theme.series1), (CPUTopology.efficiencyName, Theme.series2)])
         }
     }

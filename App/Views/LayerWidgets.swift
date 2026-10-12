@@ -135,12 +135,45 @@ struct ArcLayer: NSViewRepresentable {
 
 // MARK: - Bars
 
-/// Vertical capsules (per-core load) whose height animates in the render server.
+/// Per-core columns, laid out like Stats' column chart (measured from its source): full width with
+/// 2 pt gaps, corners rounded at most 3 pt, a 50 %→100 % gradient, a faint track, and the core's
+/// load shown while the pointer is over it. Heights animate in the render server.
 final class BarsLayerView: AnimatedLayerView {
     var values: [Float] = []
     var colors: [NSColor] = []
     private var tracks: [CALayer] = []
     private var bars: [CAGradientLayer] = []
+    private let tip = CATextLayer()
+    private var hovered: Int?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        tip.fontSize = 10
+        tip.font = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .semibold)
+        tip.alignmentMode = .center
+        tip.cornerRadius = 4
+        tip.isHidden = true
+        tip.zPosition = 10
+        layer?.addSublayer(tip)
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach(removeTrackingArea)
+        addTrackingArea(NSTrackingArea(rect: bounds, options: [.activeAlways, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],
+                                       owner: self, userInfo: nil))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        let x = convert(event.locationInWindow, from: nil).x
+        hovered = tracks.firstIndex { $0.frame.minX - 1 <= x && x <= $0.frame.maxX + 1 }
+        update(animated: false)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovered = nil
+        update(animated: false)
+    }
 
     override func update(animated: Bool) {
         let n = values.count
@@ -150,8 +183,8 @@ final class BarsLayerView: AnimatedLayerView {
                 b.anchorPoint = CGPoint(x: 0.5, y: 0)
                 b.startPoint = CGPoint(x: 0.5, y: 0)
                 b.endPoint = CGPoint(x: 0.5, y: 1)
-                layer?.addSublayer(t)
-                layer?.addSublayer(b)
+                layer?.insertSublayer(t, below: tip)
+                layer?.insertSublayer(b, below: tip)
                 tracks.append(t)
                 bars.append(b)
             }
@@ -160,24 +193,38 @@ final class BarsLayerView: AnimatedLayerView {
                 tracks.removeLast().removeFromSuperlayer()
             }
             guard n > 0 else { return }
-            let spacing: CGFloat = 3
+            let spacing: CGFloat = 2
             let w = (bounds.width - spacing * CGFloat(n - 1)) / CGFloat(n)
+            let radius = min(3, w / 2)
             for i in 0..<n {
                 let frame = CGRect(x: CGFloat(i) * (w + spacing), y: 0, width: w, height: bounds.height)
                 tracks[i].frame = frame
-                tracks[i].cornerRadius = w / 2
-                tracks[i].backgroundColor = cg(NSColor.labelColor.withAlphaComponent(0.07))
+                tracks[i].cornerRadius = radius
+                tracks[i].backgroundColor = cg(NSColor.labelColor.withAlphaComponent(hovered == i ? 0.14 : 0.07))
                 bars[i].position = CGPoint(x: frame.midX, y: 0)
-                bars[i].cornerRadius = w / 2
+                bars[i].cornerRadius = radius
                 let c = i < colors.count ? colors[i] : .controlAccentColor
-                bars[i].colors = [cg(c).copy(alpha: 0.7) as Any, cg(c) as Any]
+                bars[i].colors = [cg(c).copy(alpha: 0.5) as Any, cg(c) as Any]
+            }
+            if let h = hovered, h < n {
+                tip.string = "\(Int((values[h] * 100).rounded()))%"
+                tip.foregroundColor = cg(.labelColor)
+                tip.backgroundColor = cg(NSColor.windowBackgroundColor.withAlphaComponent(0.9))
+                tip.contentsScale = window?.backingScaleFactor ?? 2
+                let tw: CGFloat = 32
+                let x = min(max(tracks[h].frame.midX - tw / 2, 0), bounds.width - tw)
+                tip.frame = CGRect(x: x, y: bounds.height - 15, width: tw, height: 14)
+                tip.isHidden = false
+            } else {
+                tip.isHidden = true
             }
         }
-        // Height (not a scale) animates, so the rounded ends keep their shape.
         transaction(animated: animated) {
             for (i, b) in bars.enumerated() {
                 let w = tracks[i].frame.width
-                b.bounds = CGRect(x: 0, y: 0, width: w, height: max(w, bounds.height * CGFloat(min(max(values[i], 0), 1))))
+                let v = CGFloat(min(max(values[i], 0), 1))
+                // Like Stats: nothing at 0 %, otherwise at least a sliver so light load is visible.
+                b.bounds = CGRect(x: 0, y: 0, width: w, height: v > 0.001 ? max(2, bounds.height * v) : 0)
             }
         }
     }
