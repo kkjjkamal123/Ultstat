@@ -16,13 +16,13 @@ struct SummaryGrid: View {
             GridRow {
                 tile("CPU", r.cpu.map { MetricFormat.percent($0.total) }, sub: r.cpu?.performance.map { "P " + MetricFormat.percent($0) },
                      history: model.cpuHistory, tab: .cpu)
-                tile("GPU", r.gpu.map { MetricFormat.percent($0.utilization) }, sub: r.componentPower?.gpu.map(watts),
+                tile("GPU", r.gpu.map { MetricFormat.percent($0.utilization) }, sub: r.componentPower?.gpu.map(formatWatts),
                      history: model.gpuHistory, tab: .gpu)
                 tile("Memory", r.memory.map { MetricFormat.percent($0.usedFraction) }, sub: r.memory.map { ByteFormat.size($0.used) },
                      history: model.memoryHistory, tab: .memory)
             }
             GridRow {
-                tile("Power", r.systemPower.map { String(format: "%.1f W", $0) }, sub: "whole Mac", history: model.powerHistory, historyMax: nil, tab: .power)
+                tile("Power", r.systemPower.map(formatWatts), sub: "whole Mac", history: model.powerHistory, historyMax: nil, tab: .power)
                 tile("Battery", r.battery.map { "\($0.percent)%" }, sub: r.battery.map(BatteryTime.short), history: nil, tab: .battery,
                      status: batteryStatus(r.battery))
                 tile("Temp", hottest.map { unit.format($0) }, sub: "CPU", history: model.temperatureHistory(.cpuPerformance),
@@ -30,8 +30,6 @@ struct SummaryGrid: View {
             }
         }
     }
-
-    private func watts(_ w: Double) -> String { w < 1 ? String(format: "%.0f mW", w * 1000) : String(format: "%.1f W", w) }
 
     private func batteryStatus(_ b: BatterySnapshot?) -> Color? {
         guard let b, !b.externalConnected else { return nil }

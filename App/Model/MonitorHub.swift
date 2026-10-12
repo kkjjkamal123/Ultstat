@@ -94,6 +94,9 @@ final class MonitorHub {
             detailTokens = []
         }
         updateSensorGroups()
+        // Newly enabled sensor groups are swept completely on their next sample; take it now so a
+        // panel opens with every temperature instead of filling in over the next few ticks.
+        if visible, let sensors { scheduler.sampleSoon(sensors) }
     }
 
     /// Rebuilds the accessory sampler when the Bluetooth (earbuds) option changes.

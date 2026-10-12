@@ -76,8 +76,8 @@ struct SettingsDashboard: View {
             CardTitle(symbol: "bolt.fill", title: "Battery Specs", tint: .yellow)
             LegendRow(color: nil, label: "Current", value: String(format: "%.2f A", Double(b.amperage) / 1000))
             LegendRow(color: nil, label: "Voltage", value: String(format: "%.2f V", Double(b.voltage) / 1000))
-            LegendRow(color: nil, label: "Power", value: String(format: "%.2f W", b.watts))
-            if let p = r.systemPower { LegendRow(color: nil, label: "System load", value: String(format: "%.2f W", p)) }
+            LegendRow(color: nil, label: "Power", value: formatWatts(b.watts))
+            if let p = r.systemPower { LegendRow(color: nil, label: "System load", value: formatWatts(p)) }
             LegendRow(color: nil, label: "Low Power Mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "Enabled" : "Off")
             if let rem = b.remainingCapacity { LegendRow(color: nil, label: "Battery charge", value: "\(rem) mAh") }
         }
@@ -182,7 +182,7 @@ struct SettingsDashboard: View {
     private func consumptionCard(_ r: Readings) -> some View {
         Card {
             HStack(alignment: .bottom) {
-                BigNumber(caption: "Power consumption", value: r.systemPower.map { String(format: "%.2f W", $0) } ?? "–", symbol: "bolt")
+                BigNumber(caption: "Power consumption", value: r.systemPower.map(formatWatts) ?? "–", symbol: "bolt")
                 Spacer()
                 if let b = r.battery {
                     BigNumber(caption: "Time remaining", value: remaining(b, r), symbol: "clock")
@@ -257,7 +257,7 @@ private struct PowerBanner: View {
         .lineLimit(1)
     }
 
-    private func watt(_ w: Double) -> String { w < 1 ? "< 1 W" : String(format: "%.1f W", w) }
+    private func watt(_ w: Double) -> String { w < 1 ? "< 1 W" : formatWatts(w) }
 
     private func node(_ symbol: String, active: Bool) -> some View {
         Image(systemName: symbol)
@@ -277,7 +277,7 @@ private struct PowerBanner: View {
                     .frame(width: geo.size.width * CGFloat(min(1, Swift.max(0.04, watts / top))))
             }
             VStack(spacing: 1) {
-                Text(String(format: "%.2f W", watts)).font(.system(size: 14, weight: .semibold, design: .rounded)).monospacedDigit()
+                Text(formatWatts(watts)).font(.system(size: 14, weight: .semibold, design: .rounded)).monospacedDigit()
                 if let label { Text(label).font(.system(size: 10)).foregroundStyle(.secondary) }
             }
         }

@@ -94,6 +94,15 @@ public final class Scheduler: Sendable {
         return DemandToken { [weak self] in self?.release(id) }
     }
 
+    /// Samples `sampler` once, right away, on the scheduler queue (e.g. when a panel opens and
+    /// should not wait for the next tick).
+    public func sampleSoon(_ sampler: any Sampler) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            sampler.sample(tick: self.state.withLock { $0.tick })
+        }
+    }
+
     public func suspend(_ reason: SuspendReason) {
         state.withLock { _ = $0.suspendReasons.insert(reason) }
         reconcileTimer()

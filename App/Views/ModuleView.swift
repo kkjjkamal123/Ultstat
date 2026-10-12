@@ -44,7 +44,9 @@ struct ModuleView: View {
     }
 
     private func body(_ r: Readings) -> some View {
-        VStack(spacing: 8) { ModuleContent(item: item, r: r) }.frame(maxWidth: .infinity).padding(.bottom, 2)
+        VStack(spacing: 8) { ModuleContent(item: item, r: r) }
+            .frame(maxWidth: .infinity)
+            .padding(.bottom, 2)
     }
 
     private var header: some View {
@@ -96,7 +98,8 @@ struct ModuleContent: View {
 
 // MARK: - Shared helpers
 
-func formatWatts(_ w: Double) -> String { w < 1 ? String(format: "%.0f mW", w * 1000) : String(format: "%.2f W", w) }
+/// Whole watts ("3 W"); below 1 W in whole milliwatts ("120 mW"). No decimals anywhere.
+func formatWatts(_ w: Double) -> String { w < 1 ? "\(Int((max(0, w) * 1000).rounded())) mW" : "\(Int(w.rounded())) W" }
 
 func formatDuration(_ seconds: TimeInterval) -> String {
     let m = Int(seconds) / 60, h = m / 60, d = h / 24
@@ -174,7 +177,7 @@ private struct CPUModule: View {
             if let l = SystemInfo.loadAverage() {
                 LegendRow(color: nil, label: "Average load", value: String(format: "%.2f  %.2f  %.2f", l.0, l.1, l.2))
             }
-            if let w = r.componentPower?.cpu { LegendRow(color: nil, label: "Power", value: formatWatts(w)) }
+            LegendRow(color: nil, label: "Power", value: r.componentPower?.cpu.map(formatWatts) ?? (model.helperReady ? "–" : "needs helper"))
             LegendRow(color: nil, label: "Uptime", value: formatDuration(SystemInfo.uptime()))
         }
         TopProcessesCard(rows: model.hub.processes.topByCPU.map { ProcessRow(pid: $0.pid, name: $0.name, value: String(format: "%.1f%%", $0.cpu * 100)) },
@@ -211,7 +214,7 @@ private struct GPUModule: View {
             CardTitle(symbol: "info.circle", title: "Details", tint: .secondary)
             if let v = g?.renderer { LegendRow(color: nil, label: "Renderer", value: MetricFormat.percent(v)) }
             if let v = g?.tiler { LegendRow(color: nil, label: "Tiler", value: MetricFormat.percent(v)) }
-            if let w = r.componentPower?.gpu { LegendRow(color: nil, label: "Power", value: formatWatts(w)) }
+            LegendRow(color: nil, label: "Power", value: r.componentPower?.gpu.map(formatWatts) ?? "–")
             if let m = g?.memoryInUse { LegendRow(color: nil, label: "Memory in use", value: ByteFormat.size(m)) }
             if let t = temp { LegendRow(color: nil, label: "Temperature", value: unit.format(t)) }
         }
@@ -381,7 +384,10 @@ private struct SensorsModule: View {
         }
         Card(spacing: 7) {
             CardTitle(symbol: "sensor.fill", title: "Temperatures", tint: .secondary)
-            if groups.isEmpty { EmptyNote(text: "No temperature sensors found.") }
+            if groups.isEmpty {
+                // Sensors exist but haven't been read yet (first tick after opening) vs. none at all.
+                EmptyNote(text: (model.hub.sensors?.availableGroups.isEmpty ?? true) ? "No temperature sensors found." : "Reading sensors…")
+            }
             ForEach(groups, id: \.self) { g in
                 if let v = r.sensors[g] {
                     HStack(spacing: 8) {
@@ -396,25 +402,27 @@ private struct SensorsModule: View {
                 }
             }
         }
-        Card(spacing: 6) {
-            CardTitle(symbol: "fan.fill", title: "Fans", tint: .secondary)
-            if r.fans.isEmpty {
-                Text("This Mac has no fans.").font(.system(size: 12)).foregroundStyle(.secondary)
-            }
-            ForEach(r.fans) { f in
-                HStack(spacing: 8) {
-                    Text("Fan \(f.id + 1)").foregroundStyle(.secondary)
-                    Spacer()
-                    if let fr = f.fraction { GlassMeter(value: Float(fr), height: 6).frame(width: 80) }
-                    Text("\(Int(f.rpm)) rpm").monospacedDigit()
+        if model.hub.fans != nil {   // fanless Macs (MacBook Air) get no Fans card at all
+            Card(spacing: 6) {
+                CardTitle(symbol: "fan.fill", title: "Fans", tint: .secondary)
+                if r.fans.isEmpty {
+                    Text("Reading fans…").font(.system(size: 12)).foregroundStyle(.secondary)
                 }
-                .font(.system(size: 12.5))
+                ForEach(r.fans) { f in
+                    HStack(spacing: 8) {
+                        Text("Fan \(f.id + 1)").foregroundStyle(.secondary)
+                        Spacer()
+                        if let fr = f.fraction { GlassMeter(value: Float(fr), height: 6).frame(width: 80) }
+                        Text("\(Int(f.rpm)) rpm").monospacedDigit()
+                    }
+                    .font(.system(size: 12.5))
+                }
             }
         }
         if let p = r.systemPower {
             Card(spacing: 6) {
                 CardTitle(symbol: "bolt.fill", title: "Power", tint: .yellow, trailing: formatWatts(p))
-                if let g = r.componentPower?.gpu { LegendRow(color: nil, label: "GPU", value: formatWatts(g)) }
+                LegendRow(color: nil, label: "GPU", value: r.componentPower?.gpu.map(formatWatts) ?? "–")
             }
         }
     }
@@ -435,7 +443,7 @@ private struct PowerModule: View {
             }
         }
         Card {
-            CardTitle(symbol: "bolt.fill", title: "Whole Mac", tint: tint, trailing: r.systemPower.map { String(format: "%.2f W", $0) } ?? "–")
+            CardTitle(symbol: "bolt.fill", title: "Whole Mac", tint: tint, trailing: r.systemPower.map(formatWatts) ?? "–")
             SmoothChart(series: [(model.powerHistory, Theme.yellow)], maxValue: nil)
         }
         Card(spacing: 7) {
@@ -496,15 +504,15 @@ private struct BatteryModule: View {
             if let t = r.sensors[.battery]?.max {
                 Card {
                     CardTitle(symbol: "flame.fill", title: "Battery temperature", tint: .orange, trailing: unit.format(t))
-                    if batteryTemps.count > 1 { SmoothChart(series: [(batteryTemps, Theme.orange)], maxValue: nil, minValue: 20, height: 60) }
+                    SmoothChart(series: [(batteryTemps, Theme.orange)], maxValue: nil, minValue: 20, height: 60)
                 }
             }
             Card(spacing: 6) {
                 CardTitle(symbol: "bolt.fill", title: "Battery specs", tint: .yellow)
                 LegendRow(color: nil, label: "Current", value: String(format: "%.2f A", Double(b.amperage) / 1000))
                 LegendRow(color: nil, label: "Voltage", value: String(format: "%.2f V", Double(b.voltage) / 1000))
-                LegendRow(color: nil, label: "Power", value: String(format: "%.2f W", b.watts))
-                if let p = r.systemPower { LegendRow(color: nil, label: "System load", value: String(format: "%.2f W", p)) }
+                LegendRow(color: nil, label: "Power", value: formatWatts(b.watts))
+                if let p = r.systemPower { LegendRow(color: nil, label: "System load", value: formatWatts(p)) }
                 LegendRow(color: nil, label: "Low Power Mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "On" : "Off")
                 if let rem = b.remainingCapacity { LegendRow(color: nil, label: "Battery charge", value: "\(rem) mAh") }
                 if let hw = b.hardwarePercent { LegendRow(color: nil, label: "Hardware percentage", value: String(format: "%.1f %%", hw)) }

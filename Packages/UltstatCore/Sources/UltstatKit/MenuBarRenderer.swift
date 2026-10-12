@@ -17,7 +17,8 @@ public enum MetricFormat {
         }
     }
 
-    public static func watts(_ w: Double) -> String { w < 9.95 ? String(format: "%.1fW", w) : "\(Int(w.rounded()))W" }
+    /// Whole watts ("3W"); below half a watt "<1W".
+    public static func watts(_ w: Double) -> String { w < 0.5 ? "<1W" : "\(Int(w.rounded()))W" }
 }
 
 /// One drawable segment of the status item.

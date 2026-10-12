@@ -48,6 +48,7 @@ enum ProcessIcons {
 
 /// Top-processes table with app icons.
 struct ProcessTable: View {
+    static let rowCount = 8
     var rows: [ProcessRow]
     var valueTitle: String
 
@@ -59,10 +60,7 @@ struct ProcessTable: View {
                 Text(valueTitle).foregroundStyle(.tertiary)
             }
             .font(.system(size: 11))
-            if rows.isEmpty {
-                Text("Measuring…").font(.system(size: 11)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-            }
-            ForEach(Array(rows.prefix(8).enumerated()), id: \.offset) { _, row in
+            ForEach(Array(rows.prefix(Self.rowCount).enumerated()), id: \.offset) { _, row in
                 HStack(spacing: 7) {
                     Image(nsImage: ProcessIcons.icon(for: row.pid)).resizable().frame(width: 16, height: 16)
                     Text(ProcessIcons.name(for: row.pid, fallback: row.name)).lineLimit(1).truncationMode(.middle)
@@ -70,6 +68,13 @@ struct ProcessTable: View {
                     Text(row.value).monospacedDigit()
                 }
                 .font(.system(size: 12))
+            }
+            // Same height before the first measurement (processes need two samples): the panel is
+            // sized once when it opens, so the table must not grow afterwards.
+            ForEach(rows.count..<max(rows.count, Self.rowCount), id: \.self) { i in
+                Text(i == 0 && rows.isEmpty ? "Measuring…" : " ")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 16, alignment: .leading)
             }
         }
     }

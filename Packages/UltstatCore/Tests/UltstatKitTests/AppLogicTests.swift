@@ -18,7 +18,8 @@ import UltstatCore
         #expect(MetricFormat.percent(0) == "0%")
         #expect(MetricFormat.percent(0.456) == "46%")
         #expect(MetricFormat.percent(1) == "100%")
-        #expect(MetricFormat.watts(2.14) == "2.1W")
+        #expect(MetricFormat.watts(2.14) == "2W", "whole watts, no decimals")
+        #expect(MetricFormat.watts(0.3) == "<1W")
         #expect(MetricFormat.watts(12.6) == "13W")
     }
 

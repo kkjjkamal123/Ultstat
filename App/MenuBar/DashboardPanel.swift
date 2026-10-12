@@ -42,8 +42,20 @@ final class DashboardPanel: NSPanel {
         let glass = NSGlassEffectView()
         glass.cornerRadius = Self.cornerRadius
         glass.style = .regular
+        // A light tint keeps text readable over bright windows and wallpapers behind the panel.
+        glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.55)
         glass.contentView = host
         contentView = glass
+        // Panels are sized once, when shown: resizing an open panel left SwiftUI drawing the old
+        // layout offset (header clipped). Content that grows later scrolls (ModuleView's ViewThatFits),
+        // and late-arriving rows have reserved space, so the first size is the final one.
+        host.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            host.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
+            host.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
+            host.topAnchor.constraint(equalTo: glass.topAnchor),
+            host.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
+        ])
     }
 
     override var canBecomeKey: Bool { true }
