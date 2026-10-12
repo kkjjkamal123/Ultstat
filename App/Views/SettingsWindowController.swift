@@ -14,24 +14,40 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     var isOpen: Bool { window != nil }
 
     func show() {
+        // A menu-bar (accessory) app is often refused activation, so its window opens without focus
+        // and clicks only activate it. Become a regular app while Settings is open.
+        NSApp.setActivationPolicy(.regular)
         if let window {
-            window.makeKeyAndOrderFront(nil)
             NSApp.activate()
+            window.makeKeyAndOrderFront(nil)
             return
         }
         let host = NSHostingController(rootView: SettingsView().environment(model))
-        let w = NSWindow(contentViewController: host)
+        // A non-activating panel becomes key without the app being activated. macOS may refuse to
+        // activate a menu-bar app (cooperative activation), and a plain window then never takes
+        // focus, so clicks only tried to activate the app and never reached the controls.
+        let w = SettingsPanel(contentViewController: host)
         w.title = "Ultstat Settings"
-        w.styleMask = [.titled, .closable, .miniaturizable]
+        w.styleMask = [.titled, .closable, .nonactivatingPanel]
+        w.becomesKeyOnlyIfNeeded = false
+        w.isFloatingPanel = false
+        w.hidesOnDeactivate = false
         w.isReleasedWhenClosed = false
         w.delegate = self
         w.identifier = NSUserInterfaceItemIdentifier("ultstat.settings")
         w.setFrameAutosaveName("UltstatSettings")
         if !w.setFrameUsingName("UltstatSettings") { w.center() }
         window = w
-        // An accessory app must become active for its window to take focus.
         NSApp.activate()
         w.makeKeyAndOrderFront(nil)
+        w.orderFrontRegardless()
+        w.makeKey()
+        // Take key again once the window is actually on screen; a launch or another app finishing
+        // activation can otherwise leave it visible but unfocused.
+        DispatchQueue.main.async { [weak w] in
+            w?.makeKey()
+            w?.makeFirstResponder(w?.contentView)
+        }
     }
 
     func close() { window?.performClose(nil) }
@@ -40,5 +56,12 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window?.contentViewController = nil
         window?.delegate = nil
         window = nil
+        NSApp.setActivationPolicy(.accessory)   // back to menu-bar only
     }
+}
+
+/// Settings window that can always take keyboard focus.
+final class SettingsPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }

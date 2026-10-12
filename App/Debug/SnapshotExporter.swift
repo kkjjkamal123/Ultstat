@@ -27,7 +27,7 @@ enum SnapshotExporter {
             writeMenuBar(segments: segs, appearance: appearance, to: dir.appendingPathComponent("\(name).png"))
         }
         for (name, appearance) in [("dashboard-dark", NSAppearance.Name.darkAqua), ("dashboard-light", .aqua)] {
-            writeView(DashboardView().environment(model), size: NSSize(width: 340, height: 600), appearance: appearance,
+            writeView(DashboardView().environment(model), size: DashboardPanel.size, appearance: appearance,
                       to: dir.appendingPathComponent("\(name).png"))
         }
         for (tab, name) in ["general", "menubar", "battery", "alerts", "about"].enumerated() {

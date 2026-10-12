@@ -35,6 +35,8 @@ public enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 public enum WidgetStyle: String, Codable, CaseIterable, Sendable {
+    /// Caption above the value ("CPU" over "7%"), the compact default.
+    case labeled
     case text, bar, sparkline
 }
 
@@ -59,8 +61,8 @@ public final class AppSettings {
             self.items = items
         }
 
-        public var items: [MenuBarItem] = [.cpu, .memory, .temperature, .battery]
-        public var styles: [MenuBarItem: WidgetStyle] = [.cpu: .text, .memory: .text]
+        public var items: [MenuBarItem] = [.cpu, .gpu, .memory, .temperature, .power, .battery]
+        public var styles: [MenuBarItem: WidgetStyle] = [.cpu: .labeled, .gpu: .labeled, .memory: .labeled, .temperature: .labeled, .power: .labeled]
         public var interval: Int = 2
         public var temperatureUnit: TemperatureUnit = .celsius
         public var showIcons: Bool = true

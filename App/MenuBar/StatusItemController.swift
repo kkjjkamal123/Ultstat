@@ -12,11 +12,11 @@ private let log = Logger(subsystem: "io.github.kkjjkamal23.Ultstat", category: "
 /// Instead we rasterise once, tinted for the current appearance, and hand the bitmap to a
 /// `CALayer` as `contents`; Core Animation only composites it.
 @MainActor
-final class StatusItemController: NSObject, NSPopoverDelegate {
+final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let model: AppModel
     private let contentLayer = CALayer()
-    private var popover: NSPopover?
+    private var panel: DashboardPanel?
     private var lastSegments: [Segment]?
     private var lastAppearance: NSAppearance.Name?
     private var appearanceObservation: NSKeyValueObservation?
@@ -88,6 +88,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             case .stacked(let a, let b): "\(a) \(b)"
             case .bar(let v): MetricFormat.percent(v)
             case .sparkline(let v): v.last.map(MetricFormat.percent) ?? ""
+            case .labeled(let c, let v): "\(c) \(v)"
+            case .battery(let p, _, let t): "Battery \(p)% \(t)"
             }
         }.joined(separator: ", "))
     }
@@ -100,35 +102,32 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
         }
     }
 
+    var isDashboardOpen: Bool { panel?.isVisible ?? false }
+
+    func closeDashboard() { panel?.dismiss() }
+
     func togglePopover() {
-        if let popover, popover.isShown {
-            popover.performClose(nil)
+        if let panel, panel.isVisible {
+            panel.dismiss()
             return
         }
-        guard let button = item.button else { return }
-        let p = NSPopover()
-        p.behavior = .transient
-        p.animates = true
-        p.delegate = self
-        p.contentViewController = NSHostingController(rootView: DashboardView().environment(model))
-        popover = p
+        let t0 = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        let p = DashboardPanel(rootView: DashboardView().environment(model))
+        p.onClose = { [weak self] in self?.dashboardClosed() }
+        panel = p
         model.popoverOpened()
-        button.highlight(true)
-        p.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-        p.contentViewController?.view.window?.makeKey()
+        item.button?.highlight(true)
+        let anchor = item.button.flatMap { b in b.window.map { $0.convertToScreen(b.convert(b.bounds, to: nil)) } }
+        p.show(below: anchor)
+        log.notice("dashboard open took \(Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - t0) / 1e6, format: .fixed(precision: 1)) ms")
     }
 
-    nonisolated func popoverDidClose(_ notification: Notification) {
-        let closed = (notification.object as AnyObject?).map(ObjectIdentifier.init)
-        MainActor.assumeIsolated {
-            // A late close from a previous popover must not tear down the one just opened.
-            guard let popover, closed == ObjectIdentifier(popover) else { return }
-            // Tear down the SwiftUI hierarchy so nothing renders or observes while closed.
-            popover.contentViewController = nil
-            self.popover = nil
-            item.button?.highlight(false)
-            model.popoverClosed()
-        }
+    /// Tear down the SwiftUI hierarchy so nothing renders or observes while closed.
+    private func dashboardClosed() {
+        panel?.contentView = nil
+        panel = nil
+        item.button?.highlight(false)
+        model.popoverClosed()
     }
 
     private func showMenu() {

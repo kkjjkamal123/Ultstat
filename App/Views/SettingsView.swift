@@ -31,6 +31,9 @@ private struct GeneralSettings: View {
         Form {
             Toggle("Launch at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.launchAtLogin = $0 }))
                 .accessibilityIdentifier("settings.launchAtLogin")
+            if let e = model.generalError {
+                Text(e).font(.callout).foregroundStyle(Theme.critical)
+            }
             Picker("Update every", selection: $settings.stored.interval) {
                 ForEach([1, 2, 3, 5, 10], id: \.self) { Text("\($0) s").tag($0) }
             }
@@ -65,9 +68,10 @@ private struct MenuBarSettings: View {
                     HStack(spacing: 12) {
                         Label(item.title, systemImage: item.symbol)
                         Spacer()
-                        if [.cpu, .gpu, .memory].contains(item) {
+                        if [.cpu, .gpu, .memory, .temperature, .power].contains(item) {
                             Picker("Style", selection: Binding(get: { model.settings.style(for: item) },
                                                                set: { model.settings.stored.styles[item] = $0 })) {
+                                Text("Labeled").tag(WidgetStyle.labeled)
                                 Text("Text").tag(WidgetStyle.text)
                                 Text("Bar").tag(WidgetStyle.bar)
                                 Text("Graph").tag(WidgetStyle.sparkline)

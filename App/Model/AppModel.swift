@@ -8,7 +8,14 @@ import UserNotifications
 
 @MainActor @Observable
 final class AppModel {
-    let settings = AppSettings()
+    /// `-UltstatEphemeralSettings YES` (UI tests) uses a throwaway store so tests never touch real settings.
+    let settings: AppSettings = {
+        guard UserDefaults.standard.bool(forKey: "UltstatEphemeralSettings") else { return AppSettings() }
+        let name = "io.github.kkjjkamal23.Ultstat.ephemeral.\(ProcessInfo.processInfo.processIdentifier)"
+        let d = UserDefaults(suiteName: name)!
+        d.removePersistentDomain(forName: name)
+        return AppSettings(defaults: d)
+    }()
     private(set) var readings = Readings()
     private(set) var chargeStatus: ChargeStatus?
     private(set) var helperState: HelperClient.State = .notInstalled
@@ -147,8 +154,12 @@ final class AppModel {
     }
 
     func openSettings() {
+        statusItem?.closeDashboard()
         openSettingsAction?()
     }
+
+    /// Errors from General settings (launch at login), shown next to the control that failed.
+    private(set) var generalError: String?
 
     // MARK: Charging
 
@@ -274,13 +285,21 @@ final class AppModel {
     // MARK: Launch at login
 
     var launchAtLogin: Bool {
-        get { SMAppService.mainApp.status == .enabled }
+        get {
+            _ = launchAtLoginChanges   // re-read after each change
+            return SMAppService.mainApp.status == .enabled
+        }
         set {
             do {
                 if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+                generalError = SMAppService.mainApp.status == .requiresApproval
+                    ? "Allow Ultstat in System Settings › General › Login Items." : nil
             } catch {
-                helperError = error.localizedDescription
+                generalError = "Couldn't change launch at login: \(error.localizedDescription)"
             }
+            launchAtLoginChanges += 1
         }
     }
+
+    private var launchAtLoginChanges = 0
 }

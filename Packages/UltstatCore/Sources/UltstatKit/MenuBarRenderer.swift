@@ -28,6 +28,10 @@ public struct Segment: Equatable, Sendable {
         case bar(Float)
         /// Recent history, 0...1, oldest first.
         case sparkline([Float])
+        /// Small caption over a bold value ("CPU" over "7%").
+        case labeled(caption: String, value: String)
+        /// Battery glyph with the percentage knocked out of the fill, then time remaining.
+        case battery(percent: Int, charging: Bool, time: String)
     }
 
     public var symbol: String?
@@ -60,6 +64,14 @@ public enum MenuBarRenderer {
     private static let symbolConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
     private static let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
     private static let smallAttrs: [NSAttributedString.Key: Any] = [.font: smallFont, .foregroundColor: NSColor.black]
+    private static let captionAttrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 8.5, weight: .semibold), .foregroundColor: NSColor.black, .kern: 0.2,
+    ]
+    private static let valueAttrs: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.black,
+    ]
+    private static let batteryNumberFont = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
+    private static let batteryBody = NSSize(width: 27, height: 13)
     private static var symbols: [String: NSImage] = [:]
     private static var slotWidths: [String: CGFloat] = [:]
 
@@ -76,14 +88,18 @@ public enum MenuBarRenderer {
             case .cpu:
                 guard let c = r.cpu else { return Segment(symbol: icon, content: .text("–"), slot: style == .bar ? "" : "88%") }
                 if style == .sparkline { return Segment(symbol: icon, content: .sparkline(histories[.cpu] ?? [c.total])) }
+                if style == .labeled { return Segment(symbol: nil, content: .labeled(caption: "CPU", value: MetricFormat.percent(c.total)), slot: "88%") }
                 return Segment(symbol: icon, content: style == .bar ? .bar(c.total) : .text(MetricFormat.percent(c.total)), slot: "88%")
             case .gpu:
                 guard let g = r.gpu else { return nil }
                 if style == .sparkline { return Segment(symbol: icon, content: .sparkline(histories[.gpu] ?? [g.utilization])) }
+                if style == .labeled { return Segment(symbol: nil, content: .labeled(caption: "GPU", value: MetricFormat.percent(g.utilization)), slot: "88%") }
                 return Segment(symbol: icon, content: style == .bar ? .bar(g.utilization) : .text(MetricFormat.percent(g.utilization)), slot: "88%")
             case .memory:
                 guard let m = r.memory else { return Segment(symbol: icon, content: .text("–"), slot: style == .bar ? "" : "88%") }
                 if style == .sparkline { return Segment(symbol: icon, content: .sparkline(histories[.memory] ?? [m.usedFraction])) }
+                if style == .labeled { return Segment(symbol: nil,
+                               content: .labeled(caption: "RAM", value: MetricFormat.percent(m.usedFraction)), slot: "88%") }
                 return Segment(symbol: icon, content: style == .bar ? .bar(m.usedFraction) : .text(MetricFormat.percent(m.usedFraction)), slot: "88%")
             case .network:
                 guard let n = r.network else { return Segment(symbol: nil, content: .stacked(top: "↑ –", bottom: "↓ –"), slot: "↑ 888K") }
@@ -95,13 +111,19 @@ public enum MenuBarRenderer {
                 return Segment(symbol: nil, content: content, slot: "W 888K")
             case .temperature:
                 let t = r.sensors[.cpuPerformance]?.max ?? r.sensors[.cpuEfficiency]?.max
+                if style == .labeled {
+                    return Segment(symbol: nil, content: .labeled(caption: "TEMP", value: t.map { settings.temperatureUnit.format($0) } ?? "–"),
+                                   slot: "88°")
+                }
                 return Segment(symbol: icon, content: .text(t.map { settings.temperatureUnit.format($0) } ?? "–"), slot: "88°")
             case .power:
                 guard let w = r.systemPower else { return nil }
+                if style == .labeled { return Segment(symbol: nil, content: .labeled(caption: "POWER", value: MetricFormat.watts(w)), slot: "8.8W") }
                 return Segment(symbol: icon, content: .text(MetricFormat.watts(w)), slot: "88.8W")
             case .battery:
                 guard let b = r.battery else { return nil }
-                return Segment(symbol: batterySymbol(b), content: .text("\(b.percent)%"), slot: "88%")
+                return Segment(symbol: nil, content: .battery(percent: b.percent, charging: b.isCharging, time: BatteryTime.compact(b)),
+                               slot: "8:88")
             }
         }
     }
@@ -184,7 +206,15 @@ public enum MenuBarRenderer {
                 (b as NSString).size(withAttributes: smallAttrs).width)
         case .bar: 6
         case .sparkline: sparklineWidth
+        case .labeled(let caption, let value):
+            max(textWidth(caption, attrs: captionAttrs), textWidth(seg.slot, attrs: valueAttrs), textWidth(value, attrs: valueAttrs))
+        case .battery(_, _, let time):
+            batteryBody.width + 2.5 + 5 + max(textWidth(seg.slot, attrs: textAttrs), textWidth(time, attrs: textAttrs))
         }
+    }
+
+    private static func textWidth(_ s: String, attrs: [NSAttributedString.Key: Any]) -> CGFloat {
+        ceil((s as NSString).size(withAttributes: attrs).width)
     }
 
     private static func width(of seg: Segment) -> CGFloat {
@@ -218,7 +248,40 @@ public enum MenuBarRenderer {
             NSBezierPath(roundedRect: NSRect(x: track.minX, y: track.minY, width: track.width, height: fillH), xRadius: 2, yRadius: 2).fill()
         case .sparkline(let values):
             drawSparkline(values, in: NSRect(x: x, y: 3, width: sparklineWidth, height: height - 6))
+        case .labeled(let caption, let value):
+            let vs = (value as NSString).size(withAttributes: valueAttrs)
+            let cs = (caption as NSString).size(withAttributes: captionAttrs)
+            (caption as NSString).draw(at: NSPoint(x: x, y: height - cs.height + 1), withAttributes: captionAttrs)
+            (value as NSString).draw(at: NSPoint(x: x, y: -1.5 + (vs.height < 16 ? 0 : 0)), withAttributes: valueAttrs)
+        case .battery(let percent, let charging, let time):
+            drawBattery(percent: percent, charging: charging, at: NSPoint(x: x, y: (height - batteryBody.height) / 2))
+            let tx = x + batteryBody.width + 2.5 + 5
+            let ts = (time as NSString).size(withAttributes: textAttrs)
+            (time as NSString).draw(at: NSPoint(x: tx, y: (height - ts.height) / 2), withAttributes: textAttrs)
         }
+    }
+
+    /// Battery outline with a proportional fill; the percentage is XOR-drawn so it reads as a
+    /// cut-out over the fill and as ink over the empty part (works as a single-colour template).
+    private static func drawBattery(percent: Int, charging: Bool, at o: NSPoint) {
+        let body = NSRect(origin: o, size: batteryBody)
+        let outline = NSBezierPath(roundedRect: body.insetBy(dx: 0.6, dy: 0.6), xRadius: 3.2, yRadius: 3.2)
+        outline.lineWidth = 1.2
+        NSColor.black.withAlphaComponent(0.45).setStroke()
+        outline.stroke()
+        NSColor.black.withAlphaComponent(0.45).setFill()
+        NSBezierPath(roundedRect: NSRect(x: body.maxX + 0.8, y: body.midY - 2.5, width: 1.7, height: 5), xRadius: 0.8, yRadius: 0.8).fill()
+        let inner = body.insetBy(dx: 2, dy: 2)
+        let level = CGFloat(min(max(percent, 0), 100)) / 100
+        NSColor.black.setFill()
+        NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.minY, width: max(2, inner.width * level), height: inner.height),
+                     xRadius: 1.6, yRadius: 1.6).fill()
+        let label = (charging ? "⚡︎" : "") + "\(percent)"
+        let attrs: [NSAttributedString.Key: Any] = [.font: batteryNumberFont, .foregroundColor: NSColor.black]
+        let size = (label as NSString).size(withAttributes: attrs)
+        NSGraphicsContext.current?.compositingOperation = .xor
+        (label as NSString).draw(at: NSPoint(x: body.midX - size.width / 2, y: body.midY - size.height / 2), withAttributes: attrs)
+        NSGraphicsContext.current?.compositingOperation = .sourceOver
     }
 
     private static func drawSparkline(_ values: [Float], in r: NSRect) {
@@ -256,6 +319,8 @@ public enum MenuBarRenderer {
         case .stacked(let a, let b): "\(a) \(b)"
         case .bar(let v): MetricFormat.percent(v)
         case .sparkline(let v): v.last.map(MetricFormat.percent) ?? ""
+        case .labeled(let c, let v): "\(c) \(v)"
+        case .battery(let p, let charging, let t): "Battery \(p)%\(charging ? ", charging" : "")\(t == "--" ? "" : ", \(t) remaining")"
         }
     }
 }

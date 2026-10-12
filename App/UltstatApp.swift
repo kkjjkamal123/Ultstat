@@ -25,6 +25,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.statusItem = StatusItemController(model: model)
         model.openSettingsAction = { [weak self] in self?.settingsWindow.show() }
         SnapshotExporter.scheduleIfRequested(model: model)
+        // UI-test entry points: the status item may be hidden by a menu-bar manager.
+        let defaults = UserDefaults.standard
+        if defaults.bool(forKey: "UltstatOpenDashboard") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.model.statusItem?.togglePopover() }
+        }
+        SelfTest.runIfRequested(model: model) { [weak self] in self?.settingsWindow.show() }
+        if defaults.bool(forKey: "UltstatOpenSettings") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.settingsWindow.show() }
+        }
         if let item = model.statusItem { StressTester.runIfRequested(statusItem: item, model: model) }
     }
 

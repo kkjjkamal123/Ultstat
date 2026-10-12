@@ -2,38 +2,63 @@ import SwiftUI
 import UltstatCore
 import UltstatKit
 
+enum DashboardTab: String, CaseIterable, Identifiable {
+    case cpu, gpu, memory, network, disk, sensors, battery, processes
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .cpu: "CPU"
+        case .gpu: "GPU"
+        case .memory: "Memory"
+        case .network: "Network"
+        case .disk: "Disk"
+        case .sensors: "Sensors"
+        case .battery: "Battery"
+        case .processes: "Processes"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .cpu: "cpu"
+        case .gpu: "rectangle.3.group"
+        case .memory: "memorychip"
+        case .network: "arrow.up.arrow.down"
+        case .disk: "internaldrive"
+        case .sensors: "thermometer.medium"
+        case .battery: "battery.75percent"
+        case .processes: "list.bullet.rectangle"
+        }
+    }
+}
+
+/// Dashboard panel: an always-visible summary, then one tab of detail. Only the selected tab's
+/// views exist, which keeps opening fast (the single long scroll view took 73–149 ms to build).
 struct DashboardView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("dashboard.tab") private var tab: DashboardTab = .battery
 
     var body: some View {
         let r = model.readings
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             header
+            SummaryGrid(r: r, select: { tab = $0 })
+            TabStrip(selection: $tab)
             ScrollView {
-                VStack(spacing: 8) {
-                    cpuCard(r)
-                    HStack(alignment: .top, spacing: 8) {
-                        memoryCard(r)
-                        gpuCard(r)
-                    }
-                    networkCard(r)
-                    diskCard(r)
-                    if !r.sensors.isEmpty { sensorsCard(r) }
-                    if r.systemPower != nil || r.componentPower != nil { powerCard(r) }
-                    if let b = r.battery { BatteryCard(b: b, systemPower: r.systemPower) }
-                    if !r.fans.isEmpty { fansCard(r) }
-                    if !r.accessories.isEmpty { accessoriesCard(r) }
-                    ProcessesCard()
-                }
-                // No blanket `.animation(value: readings)`: it interpolated every card each tick, and Canvas
-                // sparklines are CPU-rasterised, so each 0.3 s animation redrew them at display rate.
-                // Measured with the popover open: 143 ms/s CPU with it. Meters animate on their own.
+                tabContent(r)
+                    .frame(maxWidth: .infinity, alignment: .top)
             }
-            .scrollIndicators(.never)
+            .scrollIndicators(.automatic)
+            .frame(maxHeight: .infinity)
             footer
         }
-        .padding(10)
-        .frame(width: 340, height: 600)
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private var header: some View {
@@ -49,17 +74,43 @@ struct DashboardView: View {
         HStack {
             Button("Settings", systemImage: "gearshape") { model.openSettings() }
                 .accessibilityIdentifier("dashboard.settings")
+                .help("Settings (⌘,)")
             Spacer()
             Text(Host.current().localizedName ?? "")
                 .font(.system(size: 10)).foregroundStyle(.tertiary).lineLimit(1)
             Spacer()
             Button("Quit", systemImage: "power") { NSApp.terminate(nil) }
                 .accessibilityIdentifier("dashboard.quit")
+                .help("Quit Ultstat")
         }
         .buttonStyle(.borderless)
         .labelStyle(.iconOnly)
         .font(.system(size: 13))
         .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder private func tabContent(_ r: Readings) -> some View {
+        VStack(spacing: 8) {
+            switch tab {
+            case .cpu: cpuCard(r)
+            case .gpu: gpuCard(r)
+            case .memory: memoryCard(r)
+            case .network: networkCard(r)
+            case .disk: diskCard(r)
+            case .sensors:
+                if r.sensors.isEmpty { EmptyNote(text: "No temperature sensors found.") } else { sensorsCard(r) }
+                if !r.fans.isEmpty { fansCard(r) }
+            case .battery:
+                if let b = r.battery {
+                    BatteryCard(b: b, systemPower: r.systemPower)
+                } else {
+                    EmptyNote(text: "This Mac has no battery.")
+                }
+                powerCard(r)
+                if !r.accessories.isEmpty { accessoriesCard(r) }
+            case .processes: ProcessesCard()
+            }
+        }
     }
 
     // MARK: Cards
@@ -307,6 +358,7 @@ struct BatteryCard: View {
             }
         }
         if b.isCharging { return b.minutesToFull.map { "Charging · \($0 / 60)h \($0 % 60)m left" } ?? "Charging" }
+        if b.externalConnected, b.amperage < -50 { return "Discharging (adapter bypassed)" }
         if b.externalConnected { return "On adapter, not charging" }
         return b.minutesToEmpty.map { "On battery · \($0 / 60)h \($0 % 60)m left" } ?? "On battery"
     }
