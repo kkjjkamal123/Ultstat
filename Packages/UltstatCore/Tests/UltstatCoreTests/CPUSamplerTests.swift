@@ -30,7 +30,9 @@ import Testing
         let l = s.latest
         #expect(l.perCore.count == s.topology.kinds.count)
         #expect(l.perCore.allSatisfy { (0...1).contains($0) })
-        #expect(l.performance != nil && l.efficiency != nil)
+        #expect(l.performance != nil)
+        // Virtual Macs (CI runners) expose only one core type.
+        if s.topology.efficiencyCount > 0 { #expect(l.efficiency != nil) }
     }
 
     @Test func zeroDeltaTicksAreDropped() {

@@ -57,7 +57,9 @@ import Testing
         s.sample(tick: 2)
     }
 
-    @Test func gpuUtilisationBounded() throws {
+    /// Virtual Macs (CI runners) have a paravirtual GPU that reports no utilisation.
+    @Test(.disabled(if: isVirtualMachine, "paravirtual GPU has no PerformanceStatistics"))
+    func gpuUtilisationBounded() throws {
         let g = try #require(GPUSampler())
         g.sample(tick: 0)
         let l = try #require(g.latest)
@@ -94,3 +96,9 @@ import Testing
         #expect(ProcessSampler.meaningfulName(path: "/1/2/3") == nil)
     }
 }
+
+private let isVirtualMachine: Bool = {
+    var present: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    return sysctlbyname("kern.hv_vmm_present", &present, &size, nil, 0) == 0 && present == 1
+}()
