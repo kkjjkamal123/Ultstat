@@ -28,9 +28,22 @@ public enum BatteryTime {
         return h > 0 ? "\(h)h \(String(format: "%02d", mm))m" : "\(mm)m"
     }
 
-    /// Menu-bar form, like AlDente: "3:05", or "--" without an estimate.
-    public static func compact(_ b: BatterySnapshot) -> String {
-        guard let (m, _) = minutes(b), m > 0, m <= maxMinutes else { return "--" }
+    /// On the adapter but not charging (held at a limit, or full): how long the battery would last
+    /// at the current system load, like AlDente's "Time Remaining". `systemWatts` is the whole-Mac
+    /// draw (SMC); without it the gauge's own system-load telemetry is used.
+    public static func minutesAtCurrentLoad(_ b: BatterySnapshot, systemWatts: Double?) -> Int? {
+        guard b.externalConnected, !b.isCharging, let remaining = b.remainingCapacity, remaining > 0, b.voltage > 0 else { return nil }
+        guard let w = systemWatts ?? b.flow.map({ Double($0.systemLoad) / 1000 }), w > 0.3 else { return nil }
+        let wattHours = Double(remaining) * Double(b.voltage) / 1_000_000
+        let m = Int(wattHours / w * 60)
+        return m > 0 && m <= maxMinutes ? m : nil
+    }
+
+    /// Menu-bar form, like AlDente: "3:05", or "--" without an estimate. While plugged in and not
+    /// charging it shows the time the battery would last at the current load.
+    public static func compact(_ b: BatterySnapshot, systemWatts: Double? = nil) -> String {
+        let m = minutes(b).map(\.minutes) ?? minutesAtCurrentLoad(b, systemWatts: systemWatts)
+        guard let m, m > 0, m <= maxMinutes else { return "--" }
         return "\(m / 60):\(String(format: "%02d", m % 60))"
     }
 

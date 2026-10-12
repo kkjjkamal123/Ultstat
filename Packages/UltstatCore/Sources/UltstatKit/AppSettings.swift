@@ -37,7 +37,7 @@ public enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
     public var symbol: String {
         switch self {
         case .cpu: "cpu"
-        case .gpu: "rectangle.3.group"
+        case .gpu: "display"
         case .memory: "memorychip"
         case .network: "arrow.up.arrow.down"
         case .disk: "internaldrive"
@@ -95,7 +95,7 @@ public final class AppSettings {
         /// `itemSpacing` between them, because macOS puts a wide fixed gap between separate items.
         public var separateItems = false
         /// Gap between metrics in the single item, in points.
-        public var itemSpacing: Double = 10
+        public var itemSpacing: Double = 4   // Stats: 2 pt padding each side of a module
         public static let itemSpacingRange = 0.0...20.0
         public var alerts: [AlertRule] = [
             // Fixed IDs: defaults must be identical every time they are created.

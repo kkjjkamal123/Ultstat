@@ -76,8 +76,20 @@ final class AppModel {
 
     @ObservationIgnored private var alertEngine = AlertEngine()
 
+    /// Battery level once a minute for the last 12 hours (the battery panel's chart).
+    @ObservationIgnored private(set) var batteryLevelHistory: [Float] = []
+    @ObservationIgnored private var lastBatteryLevelSample: UInt64 = 0
+
     private func receive(_ r: Readings) {
         readings = r
+        if let b = r.battery {
+            let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+            if lastBatteryLevelSample == 0 || now - lastBatteryLevelSample >= 60_000_000_000 {
+                lastBatteryLevelSample = now
+                batteryLevelHistory.append(Float(b.percent))
+                if batteryLevelHistory.count > 720 { batteryLevelHistory.removeFirst(batteryLevelHistory.count - 720) }
+            }
+        }
         if popoverOpen { panelReadings = r }
         for item in statusItems { item.render() }
         let rules = settings.stored.alerts

@@ -4,11 +4,27 @@ import UltstatCore
 import UltstatKit
 
 enum ModulePanelSize {
-    static let width: CGFloat = 340
+    static let width: CGFloat = 352
 }
 
-/// The panel for one menu-bar item, laid out like Stats (system modules) and AlDente (battery):
-/// dashboards, history, sectioned details, top processes. Only the clicked module is built.
+extension MenuBarItem {
+    /// Header tint for the module's panel.
+    var tint: Color {
+        switch self {
+        case .cpu: .blue
+        case .gpu: .purple
+        case .memory: .orange
+        case .network: .cyan
+        case .disk: .indigo
+        case .temperature: .red
+        case .power: .yellow
+        case .battery: .green
+        }
+    }
+}
+
+/// The panel for one menu-bar item: Liquid Glass cards with live charts, laid out like Stats
+/// (system modules) and AlDente (battery). Only the clicked module is built.
 struct ModuleView: View {
     @Environment(AppModel.self) private var model
     var item: MenuBarItem
@@ -22,40 +38,36 @@ struct ModuleView: View {
                 ScrollView { body(r) }.scrollIndicators(.never)
             }
         }
-        .padding(14)
+        .padding(12)
         .frame(width: ModulePanelSize.width)
-        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .focusEffectDisabled()
     }
 
     private func body(_ r: Readings) -> some View {
-        VStack(spacing: 9) { content(r) }.frame(maxWidth: .infinity).padding(.bottom, 2)
+        VStack(spacing: 8) { content(r) }.frame(maxWidth: .infinity).padding(.bottom, 2)
     }
 
     private var header: some View {
-        ZStack {
-            Text(title).font(.system(size: 16, weight: .semibold))
-            HStack {
-                Button("All metrics", systemImage: "square.grid.2x2") { model.openFullDashboard() }
-                    .help("All metrics")
-                    .accessibilityIdentifier("module.dashboard")
-                Spacer()
-                Button("Settings", systemImage: "gearshape") { model.openSettings() }
-                    .help("Settings (⌘,)")
-                    .accessibilityIdentifier("module.settings")
-            }
-            .buttonStyle(.borderless)
-            .labelStyle(.iconOnly)
-            .font(.system(size: 14))
-            .foregroundStyle(.secondary)
+        HStack(spacing: 9) {
+            IconTile(symbol: item.symbol, tint: item.tint)
+            Text(title).font(.system(size: 15, weight: .bold))
+            Spacer()
+            Button("All metrics", systemImage: "square.grid.2x2") { model.openFullDashboard() }
+                .help("All metrics")
+                .accessibilityIdentifier("module.dashboard")
+            Button("Settings", systemImage: "gearshape") { model.openSettings() }
+                .help("Settings (⌘,)")
+                .accessibilityIdentifier("module.settings")
         }
+        .labelStyle(.iconOnly)
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .controlSize(.small)
     }
 
     private var title: String {
         switch item {
-        case .memory: "RAM"
+        case .memory: "Memory"
         case .temperature: "Sensors"
         default: item.title
         }
@@ -93,8 +105,28 @@ func sensorLabel(_ g: SensorGroup) -> String {
     }
 }
 
+/// Reserved status colour for a temperature (warm ≥ 85 °C, hot ≥ 95 °C); nil when normal.
+func temperatureStatus(_ c: Float?) -> Color? {
+    guard let c else { return nil }
+    return c >= 95 ? Theme.critical : c >= 85 ? Theme.warning : nil
+}
+
 /// Temperature as a 0...1 gauge position (30 °C … 100 °C).
 func temperatureGauge(_ c: Float) -> Double { Double(min(max((c - 30) / 70, 0), 1)) }
+
+/// Top-processes card.
+private struct TopProcessesCard: View {
+    var rows: [ProcessRow]
+    var valueTitle: String
+    var symbol = "list.bullet.rectangle"
+
+    var body: some View {
+        Card {
+            CardTitle(symbol: symbol, title: "Top processes", tint: .secondary)
+            ProcessTable(rows: rows, valueTitle: valueTitle)
+        }
+    }
+}
 
 // MARK: - CPU
 
@@ -106,31 +138,40 @@ private struct CPUModule: View {
         let c = r.cpu ?? .zero
         let unit = model.settings.stored.temperatureUnit
         let temp = r.sensors[.cpuPerformance]?.max
-        HStack(spacing: 20) {
-            RingChart(parts: [(c.system, Theme.series2), (c.user, Theme.series1)], center: MetricFormat.percent(c.total))
-                .frame(width: 104, height: 104)
-            PressureGauge(value: temp.map(temperatureGauge) ?? 0, label: temp.map { unit.format($0) } ?? "–")
+        Card {
+            HStack(spacing: 14) {
+                AnimatedRing(parts: [(c.system, Theme.series2), (c.user, Theme.series1)], center: MetricFormat.percent(c.total), caption: "Usage")
+                    .frame(width: 112, height: 112)
+                ArcGauge(value: temp.map(temperatureGauge) ?? 0, label: temp.map { unit.format($0) } ?? "–", caption: "Temperature",
+                         status: temperatureStatus(temp))
+                    .frame(width: 112, height: 112)
+            }
+            .frame(maxWidth: .infinity)
+            Legend(items: [("System \(MetricFormat.percent(c.system))", Theme.series2), ("User \(MetricFormat.percent(c.user))", Theme.series1),
+                           ("Idle \(MetricFormat.percent(max(0, 1 - c.total)))", .secondary.opacity(0.4))])
         }
-        SectionHeader(title: "Usage history")
-        HistoryChart(series: [(model.cpuHistory, Theme.series1)], maxValue: 1)
+        Card {
+            CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: MenuBarItem.cpu.tint, trailing: MetricFormat.percent(c.total))
+            SmoothChart(series: [(model.cpuHistory, Theme.blue)], maxValue: 1)
+        }
         if !c.perCore.isEmpty {
-            SectionHeader(title: "Cores")
-            CoreBars(load: c, kinds: model.hub.cpu.topology.kinds)
+            Card {
+                CardTitle(symbol: "square.grid.3x3.fill", title: "Cores", tint: MenuBarItem.cpu.tint,
+                          trailing: [c.performance.map { "\(CPUTopology.performanceName.prefix(1)) \(MetricFormat.percent($0))" },
+                                     c.efficiency.map { "E \(MetricFormat.percent($0))" }].compactMap { $0 }.joined(separator: " · "))
+                CoreBars(load: c, kinds: model.hub.cpu.topology.kinds)
+            }
         }
-        SectionHeader(title: "Details")
-        LegendRow(color: Theme.series2, label: "System", value: MetricFormat.percent(c.system))
-        LegendRow(color: Theme.series1, label: "User", value: MetricFormat.percent(c.user))
-        LegendRow(color: .secondary.opacity(0.35), label: "Idle", value: MetricFormat.percent(max(0, 1 - c.total)))
-        if let p = c.performance { LegendRow(color: nil, label: "\(CPUTopology.performanceName) cores", value: MetricFormat.percent(p)) }
-        if let e = c.efficiency { LegendRow(color: nil, label: "\(CPUTopology.efficiencyName) cores", value: MetricFormat.percent(e)) }
-        if let l = SystemInfo.loadAverage() {
-            LegendRow(color: nil, label: "Average load", value: String(format: "%.2f  %.2f  %.2f", l.0, l.1, l.2))
+        Card(spacing: 6) {
+            CardTitle(symbol: "info.circle", title: "Details", tint: .secondary)
+            if let l = SystemInfo.loadAverage() {
+                LegendRow(color: nil, label: "Average load", value: String(format: "%.2f  %.2f  %.2f", l.0, l.1, l.2))
+            }
+            if let w = r.componentPower?.cpu { LegendRow(color: nil, label: "Power", value: formatWatts(w)) }
+            LegendRow(color: nil, label: "Uptime", value: formatDuration(SystemInfo.uptime()))
         }
-        if let w = r.componentPower?.cpu { LegendRow(color: nil, label: "Power", value: formatWatts(w)) }
-        LegendRow(color: nil, label: "Uptime", value: formatDuration(SystemInfo.uptime()))
-        SectionHeader(title: "Top processes")
-        ProcessTable(rows: model.hub.processes.topByCPU.map { ProcessRow(pid: $0.pid, name: $0.name, value: String(format: "%.1f%%", $0.cpu * 100)) },
-                     valueTitle: "CPU")
+        TopProcessesCard(rows: model.hub.processes.topByCPU.map { ProcessRow(pid: $0.pid, name: $0.name, value: String(format: "%.1f%%", $0.cpu * 100)) },
+                      valueTitle: "CPU")
     }
 }
 
@@ -144,20 +185,29 @@ private struct GPUModule: View {
         let g = r.gpu
         let unit = model.settings.stored.temperatureUnit
         let temp = r.sensors[.gpu]?.max
-        HStack(spacing: 20) {
-            RingChart(parts: [(g?.utilization ?? 0, Theme.series1)], center: g.map { MetricFormat.percent($0.utilization) } ?? "–")
-                .frame(width: 104, height: 104)
-            PressureGauge(value: temp.map(temperatureGauge) ?? 0, label: temp.map { unit.format($0) } ?? "–")
+        let tint = Theme.violet
+        Card {
+            HStack(spacing: 14) {
+                AnimatedRing(parts: [(g?.utilization ?? 0, tint)], center: g.map { MetricFormat.percent($0.utilization) } ?? "–", caption: "Usage")
+                    .frame(width: 112, height: 112)
+                ArcGauge(value: temp.map(temperatureGauge) ?? 0, label: temp.map { unit.format($0) } ?? "–", caption: "Temperature",
+                         status: temperatureStatus(temp))
+                    .frame(width: 112, height: 112)
+            }
+            .frame(maxWidth: .infinity)
         }
-        SectionHeader(title: "Usage history")
-        HistoryChart(series: [(model.gpuHistory, Theme.series1)], maxValue: 1)
-        SectionHeader(title: "Details")
-        LegendRow(color: Theme.series1, label: "Utilization", value: g.map { MetricFormat.percent($0.utilization) } ?? "–")
-        if let v = g?.renderer { LegendRow(color: nil, label: "Renderer utilization", value: MetricFormat.percent(v)) }
-        if let v = g?.tiler { LegendRow(color: nil, label: "Tiler utilization", value: MetricFormat.percent(v)) }
-        if let w = r.componentPower?.gpu { LegendRow(color: nil, label: "Power", value: formatWatts(w)) }
-        if let m = g?.memoryInUse { LegendRow(color: nil, label: "Memory in use", value: ByteFormat.size(m)) }
-        if let t = temp { LegendRow(color: nil, label: "Temperature", value: unit.format(t)) }
+        Card {
+            CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: tint, trailing: g.map { MetricFormat.percent($0.utilization) })
+            SmoothChart(series: [(model.gpuHistory, tint)], maxValue: 1)
+        }
+        Card(spacing: 6) {
+            CardTitle(symbol: "info.circle", title: "Details", tint: .secondary)
+            if let v = g?.renderer { LegendRow(color: nil, label: "Renderer", value: MetricFormat.percent(v)) }
+            if let v = g?.tiler { LegendRow(color: nil, label: "Tiler", value: MetricFormat.percent(v)) }
+            if let w = r.componentPower?.gpu { LegendRow(color: nil, label: "Power", value: formatWatts(w)) }
+            if let m = g?.memoryInUse { LegendRow(color: nil, label: "Memory in use", value: ByteFormat.size(m)) }
+            if let t = temp { LegendRow(color: nil, label: "Temperature", value: unit.format(t)) }
+        }
     }
 }
 
@@ -171,25 +221,34 @@ private struct MemoryModule: View {
         if let m = r.memory {
             let t = Float(max(m.total, 1))
             let parts: [(Float, Color)] = [(Float(m.app) / t, Theme.series1), (Float(m.wired) / t, Theme.series2), (Float(m.compressed) / t, Theme.series3)]
-            HStack(spacing: 20) {
-                PressureGauge(value: m.pressure == .normal ? 0.18 : m.pressure == .warning ? 0.55 : 0.88,
-                              label: m.pressure == .normal ? "Normal" : m.pressure == .warning ? "Warning" : "Critical")
-                RingChart(parts: parts, center: MetricFormat.percent(m.usedFraction)).frame(width: 104, height: 104)
+            let pressure = m.pressure == .normal ? 0.18 : m.pressure == .warning ? 0.55 : 0.88
+            Card {
+                HStack(spacing: 14) {
+                    AnimatedRing(parts: parts, center: MetricFormat.percent(m.usedFraction), caption: ByteFormat.size(m.used))
+                        .frame(width: 112, height: 112)
+                    ArcGauge(value: pressure, label: m.pressure == .normal ? "Normal" : m.pressure == .warning ? "High" : "Critical",
+                             caption: "Pressure", tint: Theme.aqua,
+                             status: m.pressure == .normal ? nil : m.pressure == .warning ? Theme.warning : Theme.critical)
+                        .frame(width: 112, height: 112)
+                }
+                .frame(maxWidth: .infinity)
             }
-            SectionHeader(title: "Usage history")
-            HistoryChart(series: [(model.memoryHistory, Theme.series1)], maxValue: 1)
-            SectionHeader(title: "Details")
-            LegendRow(color: nil, label: "Used", value: ByteFormat.size(m.used))
-            StackedMeter(parts: parts)
-            LegendRow(color: Theme.series1, label: "App", value: ByteFormat.size(m.app))
-            LegendRow(color: Theme.series2, label: "Wired", value: ByteFormat.size(m.wired))
-            LegendRow(color: Theme.series3, label: "Compressed", value: ByteFormat.size(m.compressed))
-            LegendRow(color: .secondary.opacity(0.35), label: "Free", value: ByteFormat.size(m.free))
-            LegendRow(color: nil, label: "Cached files", value: ByteFormat.size(m.cached))
-            LegendRow(color: nil, label: "Swap", value: "\(ByteFormat.size(m.swapUsed)) of \(ByteFormat.size(m.swapTotal))")
-            SectionHeader(title: "Top processes")
-            ProcessTable(rows: model.hub.processes.topByMemory.map { ProcessRow(pid: $0.pid, name: $0.name, value: ByteFormat.size($0.memory)) },
-                         valueTitle: "Memory")
+            Card {
+                CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: MenuBarItem.memory.tint, trailing: MetricFormat.percent(m.usedFraction))
+                SmoothChart(series: [(model.memoryHistory, Theme.violet)], maxValue: 1)
+            }
+            Card(spacing: 6) {
+                CardTitle(symbol: "memorychip", title: "Breakdown", tint: .secondary, trailing: "\(ByteFormat.size(m.used)) of \(ByteFormat.size(m.total))")
+                StackedMeter(parts: parts)
+                LegendRow(color: Theme.series1, label: "App", value: ByteFormat.size(m.app))
+                LegendRow(color: Theme.series2, label: "Wired", value: ByteFormat.size(m.wired))
+                LegendRow(color: Theme.series3, label: "Compressed", value: ByteFormat.size(m.compressed))
+                LegendRow(color: .secondary.opacity(0.35), label: "Free", value: ByteFormat.size(m.free))
+                LegendRow(color: nil, label: "Cached files", value: ByteFormat.size(m.cached))
+                LegendRow(color: nil, label: "Swap", value: "\(ByteFormat.size(m.swapUsed)) of \(ByteFormat.size(m.swapTotal))")
+            }
+            TopProcessesCard(rows: model.hub.processes.topByMemory.map { ProcessRow(pid: $0.pid, name: $0.name, value: ByteFormat.size($0.memory)) },
+                          valueTitle: "Memory")
         } else {
             EmptyNote(text: "Measuring…")
         }
@@ -203,36 +262,31 @@ private struct DiskModule: View {
     var r: Readings
 
     var body: some View {
-        let volumes = SystemInfo.volumes()
-        SectionHeader(title: "Drives")
-        ForEach(volumes) { v in
-            VStack(alignment: .leading, spacing: 5) {
+        let tint = Theme.blue
+        ForEach(SystemInfo.volumes()) { v in
+            Card(spacing: 6) {
+                CardTitle(symbol: v.isInternal ? "internaldrive.fill" : "externaldrive.fill", title: v.name, tint: tint,
+                          trailing: MetricFormat.percent(v.usedFraction))
+                GlassMeter(value: v.usedFraction, tint: v.usedFraction > 0.9 ? Theme.warning : tint)
                 HStack {
-                    Image(systemName: v.isInternal ? "internaldrive" : "externaldrive").foregroundStyle(.secondary)
-                    Text(v.name).font(.system(size: 12.5, weight: .semibold)).lineLimit(1)
+                    Text("\(ByteFormat.size(UInt64(max(0, v.available)))) free")
                     Spacer()
-                    Text(MetricFormat.percent(v.usedFraction)).font(.system(size: 12.5)).monospacedDigit()
+                    Text("of \(ByteFormat.size(UInt64(max(0, v.capacity))))")
                 }
-                Meter(value: v.usedFraction, tint: v.usedFraction > 0.9 ? Theme.warning : Theme.series1)
-                HStack {
-                    Text("\(ByteFormat.size(UInt64(max(0, v.available)))) free").foregroundStyle(.secondary)
-                    Spacer()
-                    Text("of \(ByteFormat.size(UInt64(max(0, v.capacity))))").foregroundStyle(.secondary)
-                }
-                .font(.system(size: 11))
+                .font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            .padding(9)
-            .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
         }
-        SectionHeader(title: "Activity")
-        HistoryChart(series: [(model.diskReadHistory, Theme.series1), (model.diskWriteHistory, Theme.series2)], maxValue: nil, height: 70)
-        Legend(items: [("Read", Theme.series1), ("Write", Theme.series2)])
-        if let d = r.disk {
-            LegendRow(color: Theme.series1, label: "Read", value: ByteFormat.rate(d.read))
-            LegendRow(color: Theme.series2, label: "Write", value: ByteFormat.rate(d.write))
+        Card {
+            CardTitle(symbol: "chart.xyaxis.line", title: "Activity", tint: tint)
+            HStack(spacing: 18) {
+                BigNumber(caption: "Read", value: r.disk.map { ByteFormat.rate($0.read) } ?? "–")
+                BigNumber(caption: "Write", value: r.disk.map { ByteFormat.rate($0.write) } ?? "–")
+                Spacer()
+            }
+            SmoothChart(series: [(model.diskReadHistory, Theme.series1), (model.diskWriteHistory, Theme.series2)], maxValue: nil)
+            Legend(items: [("Read", Theme.series1), ("Write", Theme.series2)])
         }
-        SectionHeader(title: "Top processes")
-        ProcessTable(rows: model.hub.processes.topByDisk.map {
+        TopProcessesCard(rows: model.hub.processes.topByDisk.map {
             ProcessRow(pid: $0.pid, name: $0.name, value: "\(ByteFormat.rate($0.diskRead)) · \(ByteFormat.rate($0.diskWrite))")
         }, valueTitle: "Read · Write")
     }
@@ -248,39 +302,44 @@ private struct NetworkModule: View {
 
     var body: some View {
         let n = r.network
-        HStack(spacing: 34) {
-            BigStat(title: "Downloading", value: n.map { ByteFormat.rate($0.download) } ?? "–", color: Theme.series1)
-            BigStat(title: "Uploading", value: n.map { ByteFormat.rate($0.upload) } ?? "–", color: Theme.series2)
-        }
-        SectionHeader(title: "Usage history")
-        HistoryChart(series: [(model.downloadHistory, Theme.series1), (model.uploadHistory, Theme.series2)], maxValue: nil)
-        Legend(items: [("Download", Theme.series1), ("Upload", Theme.series2)])
-        SectionHeader(title: "Details")
-        let status = model.connectivity
-        LegendRow(color: nil, label: "Status", value: status.map { $0.connected ? "Connected" : "Offline" } ?? "–")
-        if let s = status, s.connected { LegendRow(color: nil, label: "Connection", value: s.interfaceType + (s.expensive ? " (metered)" : "")) }
-        if let n {
-            // Only interfaces that actually have an address (en2/en3 are often idle bridge ports).
-            let addressed = n.interfaces.map(SystemInfo.addresses(of:)).filter { $0.ipv4 != nil }.prefix(2)
-            ForEach(Array(addressed), id: \.name) { a in
-                LegendRow(color: nil, label: "Local IP (\(a.name))", value: a.ipv4 ?? "")
+        Card {
+            HStack(spacing: 18) {
+                BigNumber(caption: "Download", value: n.map { ByteFormat.rate($0.download) } ?? "–", symbol: "arrow.down.circle.fill")
+                BigNumber(caption: "Upload", value: n.map { ByteFormat.rate($0.upload) } ?? "–", symbol: "arrow.up.circle.fill")
+                Spacer()
             }
-            LegendRow(color: nil, label: "Total download", value: ByteFormat.size(n.totalIn))
-            LegendRow(color: nil, label: "Total upload", value: ByteFormat.size(n.totalOut))
+            SmoothChart(series: [(model.downloadHistory, Theme.series1), (model.uploadHistory, Theme.series2)], maxValue: nil)
+            Legend(items: [("Download", Theme.series1), ("Upload", Theme.series2)])
         }
-        HStack {
-            Text("Public IP").foregroundStyle(.secondary)
-            Spacer()
-            if let ip = publicIP {
-                Text(ip).monospacedDigit().textSelection(.enabled)
-            } else {
-                Button(fetching ? "Looking up…" : "Show") { fetchPublicIP() }
-                    .controlSize(.small)
-                    .disabled(fetching)
-                    .help("Asks api.ipify.org for your public address. Nothing is sent until you click.")
+        Card(spacing: 6) {
+            let status = model.connectivity
+            CardTitle(symbol: status?.connected == false ? "wifi.slash" : "wifi", title: "Connection", tint: MenuBarItem.network.tint,
+                      trailing: status.map { $0.connected ? "Connected" : "Offline" })
+            if let s = status, s.connected { LegendRow(color: nil, label: "Type", value: s.interfaceType + (s.expensive ? " (metered)" : "")) }
+            if let n {
+                // Only interfaces that actually have an address (en2/en3 are often idle bridge ports).
+                let addressed = n.interfaces.map(SystemInfo.addresses(of:)).filter { $0.ipv4 != nil }.prefix(2)
+                ForEach(Array(addressed), id: \.name) { a in
+                    LegendRow(color: nil, label: "Local IP (\(a.name))", value: a.ipv4 ?? "")
+                }
+                LegendRow(color: nil, label: "Total download", value: ByteFormat.size(n.totalIn))
+                LegendRow(color: nil, label: "Total upload", value: ByteFormat.size(n.totalOut))
             }
+            HStack {
+                Text("Public IP").foregroundStyle(.secondary)
+                Spacer()
+                if let ip = publicIP {
+                    Text(ip).monospacedDigit().textSelection(.enabled)
+                } else {
+                    Button(fetching ? "Looking up…" : "Show") { fetchPublicIP() }
+                        .buttonStyle(.glass)
+                        .controlSize(.small)
+                        .disabled(fetching)
+                        .help("Asks api.ipify.org for your public address. Nothing is sent until you click.")
+                }
+            }
+            .font(.system(size: 12.5))
         }
-        .font(.system(size: 12.5))
     }
 
     /// Only on request: this contacts an outside server.
@@ -308,39 +367,48 @@ private struct SensorsModule: View {
     var body: some View {
         let unit = model.settings.stored.temperatureUnit
         let groups = r.sensors.keys.filter { $0 != .other }.sorted()
-        SectionHeader(title: "CPU temperature")
-        HistoryChart(series: [(model.temperatureHistory(.cpuPerformance), Theme.series1)], maxValue: 110)
-        SectionHeader(title: "Temperatures")
-        if groups.isEmpty { EmptyNote(text: "No temperature sensors found.") }
-        ForEach(groups, id: \.self) { g in
-            if let v = r.sensors[g] {
+        let cpu = r.sensors[.cpuPerformance]?.max
+        Card {
+            CardTitle(symbol: "thermometer.medium", title: "CPU temperature", tint: MenuBarItem.temperature.tint, trailing: cpu.map { unit.format($0) })
+            SmoothChart(series: [(model.temperatureHistory(.cpuPerformance), Theme.orange)], maxValue: 110, minValue: 20)
+        }
+        Card(spacing: 7) {
+            CardTitle(symbol: "sensor.fill", title: "Temperatures", tint: .secondary)
+            if groups.isEmpty { EmptyNote(text: "No temperature sensors found.") }
+            ForEach(groups, id: \.self) { g in
+                if let v = r.sensors[g] {
+                    HStack(spacing: 8) {
+                        Text(sensorLabel(g)).foregroundStyle(.secondary).lineLimit(1)
+                        Spacer(minLength: 6)
+                        GlassMeter(value: Float(temperatureGauge(v.max)),
+                                   tint: v.max >= 95 ? Theme.critical : v.max >= 85 ? Theme.warning : Theme.orange, height: 6)
+                            .frame(width: 80)
+                        Text(unit.format(v.max)).monospacedDigit().frame(width: 38, alignment: .trailing)
+                    }
+                    .font(.system(size: 12.5))
+                }
+            }
+        }
+        Card(spacing: 6) {
+            CardTitle(symbol: "fan.fill", title: "Fans", tint: .secondary)
+            if r.fans.isEmpty {
+                Text("This Mac has no fans.").font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            ForEach(r.fans) { f in
                 HStack(spacing: 8) {
-                    Text(sensorLabel(g)).foregroundStyle(.secondary)
-                    Spacer(minLength: 6)
-                    Meter(value: Float(temperatureGauge(v.max)), tint: v.max >= 95 ? Theme.critical : v.max >= 85 ? Theme.warning : Theme.series1)
-                        .frame(width: 70)
-                    Text(unit.format(v.max)).monospacedDigit().frame(width: 40, alignment: .trailing)
+                    Text("Fan \(f.id + 1)").foregroundStyle(.secondary)
+                    Spacer()
+                    if let fr = f.fraction { GlassMeter(value: Float(fr), height: 6).frame(width: 80) }
+                    Text("\(Int(f.rpm)) rpm").monospacedDigit()
                 }
                 .font(.system(size: 12.5))
             }
         }
         if let p = r.systemPower {
-            SectionHeader(title: "Power")
-            LegendRow(color: nil, label: "Whole Mac", value: formatWatts(p))
-            if let g = r.componentPower?.gpu { LegendRow(color: nil, label: "GPU", value: formatWatts(g)) }
-        }
-        SectionHeader(title: "Fans")
-        if r.fans.isEmpty {
-            Text("This Mac has no fans.").font(.system(size: 12)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading)
-        }
-        ForEach(r.fans) { f in
-            HStack(spacing: 8) {
-                Text("Fan \(f.id + 1)").foregroundStyle(.secondary)
-                Spacer()
-                if let fr = f.fraction { Meter(value: Float(fr)).frame(width: 70) }
-                Text("\(Int(f.rpm)) rpm").monospacedDigit()
+            Card(spacing: 6) {
+                CardTitle(symbol: "bolt.fill", title: "Power", tint: .yellow, trailing: formatWatts(p))
+                if let g = r.componentPower?.gpu { LegendRow(color: nil, label: "GPU", value: formatWatts(g)) }
             }
-            .font(.system(size: 12.5))
         }
     }
 }
@@ -352,23 +420,39 @@ private struct PowerModule: View {
     var r: Readings
 
     var body: some View {
-        BigStat(title: "Whole Mac", value: r.systemPower.map { String(format: "%.2f W", $0) } ?? "–", color: Theme.series1)
-        SectionHeader(title: "Power history")
-        HistoryChart(series: [(model.powerHistory, Theme.series1)], maxValue: nil)
-        SectionHeader(title: "Components")
-        let c = r.componentPower
-        let helper = model.helperState == .running
-        LegendRow(color: nil, label: "CPU", value: c?.cpu.map(formatWatts) ?? (helper ? "–" : "needs helper"))
-        LegendRow(color: nil, label: "GPU", value: c?.gpu.map(formatWatts) ?? "–")
-        LegendRow(color: nil, label: "Neural Engine", value: c?.ane.map(formatWatts) ?? (helper ? "–" : "needs helper"))
-        LegendRow(color: nil, label: "Memory", value: c?.dram.map(formatWatts) ?? (helper ? "–" : "needs helper"))
+        let tint = Theme.yellow
         if let f = r.battery?.flow {
-            SectionHeader(title: "Power flow")
-            PowerFlowView(flow: f)
+            Card {
+                PowerFlowStrip(adapterWatts: Double(f.adapterIn) / 1000, systemWatts: Double(f.systemLoad) / 1000,
+                               batteryWatts: Double(f.battery) / 1000, batteryPercent: r.battery?.percent ?? 0)
+            }
         }
-        SectionHeader(title: "Top energy users")
-        ProcessTable(rows: model.hub.processes.topByPower.map { ProcessRow(pid: $0.pid, name: $0.name, value: formatWatts($0.watts)) },
-                     valueTitle: "Power")
+        Card {
+            CardTitle(symbol: "bolt.fill", title: "Whole Mac", tint: tint, trailing: r.systemPower.map { String(format: "%.2f W", $0) } ?? "–")
+            SmoothChart(series: [(model.powerHistory, Theme.yellow)], maxValue: nil)
+        }
+        Card(spacing: 7) {
+            let c = r.componentPower
+            let helper = model.helperState == .running
+            let total = max(r.systemPower ?? 1, 0.001)
+            CardTitle(symbol: "square.stack.3d.up.fill", title: "Components", tint: .secondary)
+            component("CPU", c?.cpu, total: total, missing: helper ? "–" : "needs helper", tint: Theme.blue)
+            component("GPU", c?.gpu, total: total, missing: "–", tint: Theme.blue)
+            component("Neural Engine", c?.ane, total: total, missing: helper ? "–" : "needs helper", tint: Theme.blue)
+            component("Memory", c?.dram, total: total, missing: helper ? "–" : "needs helper", tint: Theme.blue)
+        }
+        TopProcessesCard(rows: model.hub.processes.topByPower.map { ProcessRow(pid: $0.pid, name: $0.name, value: formatWatts($0.watts)) },
+                      valueTitle: "Power", symbol: "bolt.horizontal")
+    }
+
+    private func component(_ name: String, _ watts: Double?, total: Double, missing: String, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Text(name).foregroundStyle(.secondary)
+            Spacer(minLength: 6)
+            if let watts { GlassMeter(value: Float(watts / total), tint: tint, height: 6).frame(width: 80) }
+            Text(watts.map(formatWatts) ?? missing).monospacedDigit().frame(minWidth: 62, alignment: .trailing)
+        }
+        .font(.system(size: 12.5))
     }
 }
 
@@ -380,55 +464,98 @@ private struct BatteryModule: View {
 
     var body: some View {
         if let b = r.battery {
-            hero(b)
-            ChargeControlSection()
+            let unit = model.settings.stored.temperatureUnit
             if let f = b.flow {
-                SectionHeader(title: "Power flow")
-                PowerFlowView(flow: f)
-                SectionHeader(title: "Power consumption")
-                HistoryChart(series: [(model.powerFlowHistory, Theme.series1)], maxValue: nil, height: 60)
+                Card {
+                    PowerFlowStrip(adapterWatts: Double(f.adapterIn) / 1000, systemWatts: r.systemPower ?? Double(f.systemLoad) / 1000,
+                                   batteryWatts: Double(f.battery) / 1000, batteryPercent: b.percent)
+                }
             }
-            SectionHeader(title: "Battery health")
-            if let h = b.health { LegendRow(color: nil, label: "Maximum capacity", value: String(format: "%.1f%%", h * 100)) }
-            if let full = b.fullChargeCapacity, b.designCapacity > 0 {
-                LegendRow(color: nil, label: "macOS capacity", value: String(format: "%.1f%%", Double(full) / Double(b.designCapacity) * 100))
+            Card { hero(b) }
+            ChargeControlSection()
+            Card {
+                HStack(alignment: .bottom) {
+                    BigNumber(caption: "Battery level", value: "\(b.percent) %")
+                    Spacer()
+                    BigNumber(caption: "Time remaining", value: timeRemaining(b), symbol: "clock")
+                }
+                SmoothChart(series: [(model.batteryLevelHistory, Theme.aqua)], maxValue: 100,
+                            reference: model.settings.stored.chargeControlEnabled ? Float(model.settings.stored.chargePolicy.limit) : nil,
+                            referenceColor: Theme.orange)
+                Text(model.batteryLevelHistory.count < 2 ? "Builds up while Ultstat runs (one point a minute)." : "Last \(historySpan)")
+                    .font(.system(size: 10)).foregroundStyle(.tertiary)
             }
-            LegendRow(color: nil, label: "Cycles", value: "\(b.cycleCount)")
-            if let t = r.sensors[.battery]?.max { LegendRow(color: nil, label: "Temperature", value: model.settings.stored.temperatureUnit.format(t)) }
-            LegendRow(color: nil, label: "Voltage", value: String(format: "%.2f V", Double(b.voltage) / 1000))
-            LegendRow(color: nil, label: "Current", value: "\(b.amperage) mA")
-            LegendRow(color: nil, label: "Power", value: String(format: "%.2f W", b.watts))
-            if let hw = b.hardwarePercent { LegendRow(color: nil, label: "Hardware percentage", value: String(format: "%.1f%%", hw)) }
-            if let full = b.fullChargeCapacity { LegendRow(color: nil, label: "Full charge capacity", value: "\(full) mAh") }
-            LegendRow(color: nil, label: "Design capacity", value: "\(b.designCapacity) mAh")
-            if let a = b.adapter, b.externalConnected {
-                SectionHeader(title: "Power adapter")
-                if let n = a.name { LegendRow(color: nil, label: "Name", value: n) }
-                if let w = a.watts { LegendRow(color: nil, label: "Power", value: "\(w) W") }
-                if let v = a.voltage { LegendRow(color: nil, label: "Voltage", value: String(format: "%.1f V", Double(v) / 1000)) }
-                if let c = a.current { LegendRow(color: nil, label: "Current", value: "\(c) mA") }
-                if let m = a.manufacturer { LegendRow(color: nil, label: "Manufacturer", value: m) }
+            let batteryTemps = model.temperatureHistory(.battery)
+            if let t = r.sensors[.battery]?.max {
+                Card {
+                    CardTitle(symbol: "flame.fill", title: "Battery temperature", tint: .orange, trailing: unit.format(t))
+                    if batteryTemps.count > 1 { SmoothChart(series: [(batteryTemps, Theme.orange)], maxValue: nil, minValue: 20, height: 60) }
+                }
+            }
+            Card(spacing: 6) {
+                CardTitle(symbol: "bolt.fill", title: "Battery specs", tint: .yellow)
+                LegendRow(color: nil, label: "Current", value: String(format: "%.2f A", Double(b.amperage) / 1000))
+                LegendRow(color: nil, label: "Voltage", value: String(format: "%.2f V", Double(b.voltage) / 1000))
+                LegendRow(color: nil, label: "Power", value: String(format: "%.2f W", b.watts))
+                if let p = r.systemPower { LegendRow(color: nil, label: "System load", value: String(format: "%.2f W", p)) }
+                LegendRow(color: nil, label: "Low Power Mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "On" : "Off")
+                if let rem = b.remainingCapacity { LegendRow(color: nil, label: "Battery charge", value: "\(rem) mAh") }
+                if let hw = b.hardwarePercent { LegendRow(color: nil, label: "Hardware percentage", value: String(format: "%.1f %%", hw)) }
+            }
+            Card(spacing: 6) {
+                CardTitle(symbol: "heart.fill", title: "Battery health", tint: .pink,
+                          trailing: b.health.map { String(format: "%.0f %%", $0 * 100) })
+                LegendRow(color: nil, label: "Design capacity", value: "\(b.designCapacity) mAh")
+                if let full = b.fullChargeCapacity, b.designCapacity > 0 {
+                    LegendRow(color: nil, label: "Maximum capacity",
+                              value: "\(full) mAh · " + String(format: "%.1f %%", Double(full) / Double(b.designCapacity) * 100))
+                }
+                if let h = b.health { LegendRow(color: nil, label: "Gauge health", value: String(format: "%.1f %%", h * 100)) }
+                LegendRow(color: nil, label: "Cycle count", value: "\(b.cycleCount)")
+            }
+            Card(spacing: 6) {
+                CardTitle(symbol: "powerplug.fill", title: "Power adapter", tint: .yellow)
+                if let a = b.adapter, b.externalConnected {
+                    if let n = a.name { LegendRow(color: nil, label: "Name", value: n) }
+                    if let w = a.watts { LegendRow(color: nil, label: "Rated power", value: "\(w) W") }
+                    if let v = a.voltage { LegendRow(color: nil, label: "Voltage", value: String(format: "%.1f V", Double(v) / 1000)) }
+                    if let c = a.current { LegendRow(color: nil, label: "Current", value: "\(c) mA") }
+                    if let m = a.manufacturer { LegendRow(color: nil, label: "Manufacturer", value: m) }
+                } else {
+                    Text("Not connected.").font(.system(size: 12)).foregroundStyle(.secondary)
+                }
             }
         } else {
             EmptyNote(text: "This Mac has no battery.")
         }
     }
 
+    private var historySpan: String {
+        let m = model.batteryLevelHistory.count - 1
+        return m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m) min"
+    }
+
+    private func timeRemaining(_ b: BatterySnapshot) -> String {
+        if let (m, _) = BatteryTime.minutes(b) { return BatteryTime.format(minutes: m) }
+        if let m = BatteryTime.minutesAtCurrentLoad(b, systemWatts: r.systemPower) { return BatteryTime.format(minutes: m) }
+        return "--"
+    }
+
     private func hero(_ b: BatterySnapshot) -> some View {
         HStack(spacing: 14) {
             BatteryGlyph(percent: b.percent, charging: b.isCharging, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
-                .frame(width: 84, height: 38)
+                .frame(width: 78, height: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(b.percent)%").font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
-                Text(BatteryTime.short(b)).font(.system(size: 12)).foregroundStyle(.secondary)
-                Text(stateText(b)).font(.system(size: 11, weight: .medium)).foregroundStyle(Theme.series1)
+                Text("\(b.percent)%").font(.system(size: 26, weight: .bold, design: .rounded)).monospacedDigit()
+                Text(stateText(b)).font(.system(size: 11.5, weight: .semibold)).foregroundStyle(.green)
+                Text(BatteryTime.short(b)).font(.system(size: 11)).foregroundStyle(.secondary)
             }
             Spacer()
         }
     }
 
     private func stateText(_ b: BatterySnapshot) -> String {
-        if let mode = model.chargeStatus?.mode, model.settings.stored.chargeControlEnabled {
+        if let mode = model.chargeStatus?.mode, model.settings.stored.chargeControlEnabled, model.helperReady {
             switch mode {
             case .holding: return "Paused at limit"
             case .sailing: return "Sailing"
@@ -453,32 +580,36 @@ private struct ChargeControlSection: View {
     var body: some View {
         let p = model.settings.stored.chargePolicy
         let ready = model.helperReady
-        SectionHeader(title: "Charge limit")
-        if !ready {
-            HStack {
-                Text(model.helperNeedsUpdate ? "The charge helper needs updating for this version."
-                                             : "Install the helper to control charging.")
-                    .font(.system(size: 11.5)).foregroundStyle(.secondary)
-                Spacer()
-                if model.installing {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Button(model.helperNeedsUpdate ? "Update" : "Install") { model.installHelper() }
-                        .controlSize(.small).accessibilityIdentifier("battery.install")
+        let unit = model.settings.stored.temperatureUnit
+        Card {
+            CardTitle(symbol: "battery.100percent.bolt", title: "Charge limit", tint: .green)
+            if !ready {
+                HStack {
+                    Text(model.helperNeedsUpdate ? "The charge helper needs updating for this version."
+                                                 : "Install the helper to control charging.")
+                        .font(.system(size: 11.5)).foregroundStyle(.secondary)
+                    Spacer()
+                    if model.installing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Button(model.helperNeedsUpdate ? "Update" : "Install") { model.installHelper() }
+                            .buttonStyle(.glassProminent)
+                            .controlSize(.small)
+                            .accessibilityIdentifier("battery.install")
+                    }
                 }
+                if let e = model.helperError { Text(e).font(.system(size: 11)).foregroundStyle(Theme.critical) }
             }
-            if let e = model.helperError { Text(e).font(.system(size: 11)).foregroundStyle(Theme.critical) }
-        }
-        Group {
             HStack {
                 Toggle("Limit", isOn: Binding(get: { model.settings.stored.chargeControlEnabled }, set: { model.setChargeControl($0) }))
                     .toggleStyle(.switch).controlSize(.small)
                     .accessibilityIdentifier("battery.limitToggle")
                 Spacer()
-                Text("\(p.limit)%").font(.system(size: 15, weight: .semibold, design: .rounded)).monospacedDigit()
+                Text("\(p.limit)%").font(.system(size: 17, weight: .bold, design: .rounded)).monospacedDigit()
             }
             Slider(value: Binding(get: { Double(p.limit) }, set: { v in model.updatePolicy { $0.limit = Int(v) } }), in: 20...100, step: 1)
                 .controlSize(.small)
+                .tint(.green)
                 .accessibilityIdentifier("battery.limitSlider")
             HStack(spacing: 8) {
                 actionButton("Top Up", "bolt.fill", active: p.topUp) { model.updatePolicy { $0.topUp.toggle() } }
@@ -502,29 +633,32 @@ private struct ChargeControlSection: View {
                     .toggleStyle(.switch).controlSize(.small)
                 Spacer()
                 if let h = p.heatProtection {
-                    let unit = model.settings.stored.temperatureUnit
                     Stepper("\(unit.format(Float(h)))\(unit == .celsius ? "C" : "F")",
                             value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
                         .font(.system(size: 12)).monospacedDigit()
                 }
             }
+            if !ready, model.settings.stored.chargeControlEnabled {
+                Text("Your choices are saved and apply as soon as the helper is ready.")
+                    .font(.system(size: 10.5)).foregroundStyle(.tertiary)
+            }
         }
         .font(.system(size: 12.5))
-        if !ready, model.settings.stored.chargeControlEnabled {
-            Text("Your choices are saved and apply as soon as the helper is ready.")
-                .font(.system(size: 10.5)).foregroundStyle(.tertiary)
-        }
     }
 
     private func actionButton(_ title: String, _ symbol: String, active: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 3) {
-                Image(systemName: symbol).font(.system(size: 13, weight: .semibold))
-                Text(title).font(.system(size: 10.5, weight: .medium))
+            VStack(spacing: 4) {
+                Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
+                    .symbolEffect(.bounce, value: active)
+                Text(title).font(.system(size: 10.5, weight: .semibold))
             }
-            .frame(maxWidth: .infinity, minHeight: 40)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .foregroundStyle(active ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-            .background(active ? AnyShapeStyle(Theme.series1) : AnyShapeStyle(.fill.tertiary), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(active ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Color.primary.opacity(0.07)),
+                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .animation(.smooth(duration: 0.25), value: active)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -533,39 +667,26 @@ private struct ChargeControlSection: View {
 
 // MARK: - Small components
 
-struct BigStat: View {
-    var title: String
-    var value: String
-    var color: Color
-
-    var body: some View {
-        VStack(spacing: 2) {
-            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            Text(value).font(.system(size: 20, weight: .semibold, design: .rounded)).monospacedDigit()
-            Capsule().fill(color).frame(width: 24, height: 3)
-        }
-    }
-}
-
-/// Per-core vertical bars, performance cores in the brand colour.
+/// Per-core vertical bars (performance cores in blue, efficiency in amber) that grow smoothly.
 struct CoreBars: View {
     var load: CPULoad
     var kinds: [CPUTopology.Kind]
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: 5) {
             HStack(alignment: .bottom, spacing: 3) {
                 ForEach(Array(load.perCore.enumerated()), id: \.offset) { i, v in
                     let perf = i < kinds.count && kinds[i] == .performance
-                    UnevenRoundedRectangle(topLeadingRadius: 2.5, topTrailingRadius: 2.5)
-                        .fill(perf ? Theme.series1 : Theme.series2)
-                        .frame(height: max(2, 40 * CGFloat(v)))
-                        .frame(maxHeight: 40, alignment: .bottom)
+                    let tint = perf ? Theme.series1 : Theme.series2
+                    ZStack(alignment: .bottom) {
+                        Capsule().fill(Color.primary.opacity(0.07))
+                        Capsule().fill(LinearGradient(colors: [tint.opacity(0.7), tint], startPoint: .bottom, endPoint: .top))
+                            .frame(height: max(4, 44 * CGFloat(min(max(v, 0), 1))))
+                    }
+                    .frame(height: 44)
                 }
             }
-            .frame(height: 40)
-            .padding(6)
-            .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .animation(.smooth(duration: 0.4), value: load.perCore)
             Legend(items: [(CPUTopology.performanceName, Theme.series1), (CPUTopology.efficiencyName, Theme.series2)])
         }
     }
@@ -599,6 +720,7 @@ struct BatteryGlyph: View {
                     .frame(width: capW, height: geo.size.height * 0.36)
             }
         }
+        .animation(.smooth(duration: 0.4), value: percent)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Battery \(percent) percent\(charging ? ", charging" : "")")
     }

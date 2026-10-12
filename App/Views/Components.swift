@@ -6,9 +6,17 @@ import SwiftUI
 /// (light #efefef, dark #242424; all-pairs CVD ΔE ≥ 12.6, normal-vision ΔE ≥ 21.9, ≥ 3:1 contrast).
 /// Slot order is fixed: a series keeps its colour wherever it appears.
 enum Theme {
-    static let series1 = adaptive(light: 0x009A86, dark: 0x10AD92)   // teal (brand)
-    static let series2 = adaptive(light: 0xD9681C, dark: 0xDC6A22)   // amber
-    static let series3 = adaptive(light: 0x6250D6, dark: 0x9085E9)   // violet
+    // Chart colours: the dataviz reference palette, stepped per mode and validated with its script
+    // against this app's card surfaces (#E9E9EB light, #2A2A2C dark). Slots 1-3 pass all-pairs CVD
+    // and normal-vision checks, so they may share one chart; the others are single-series hues.
+    static let blue = adaptive(light: 0x2A78D6, dark: 0x3987E5)     // slot 1
+    static let orange = adaptive(light: 0xEB6834, dark: 0xD95926)   // slot 2
+    static let aqua = adaptive(light: 0x1BAF7A, dark: 0x199E70)     // slot 3
+    static let yellow = adaptive(light: 0xEDA100, dark: 0xC98500)   // slot 4 (single-series only)
+    static let violet = adaptive(light: 0x6250D6, dark: 0x9085E9)   // slot 7 (single-series only)
+    static let series1 = blue
+    static let series2 = orange
+    static let series3 = aqua
     /// Reserved status colours; always paired with an icon or label, never used for series.
     static let warning = adaptive(light: 0xB27600, dark: 0xE0A000)
     static let critical = adaptive(light: 0xD33A3A, dark: 0xE66767)

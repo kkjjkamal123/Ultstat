@@ -86,3 +86,11 @@ import Testing
         _ = x
     }
 }
+
+@Suite struct ProcessNameTests {
+    @Test func versionNamedExecutablesUseTheirFolder() {
+        #expect(ProcessSampler.meaningfulName(path: "/Users/a/.local/share/claude/versions/2.1.296") == "claude")
+        #expect(ProcessSampler.meaningfulName(path: "/opt/tool/bin/1.0") == "tool")
+        #expect(ProcessSampler.meaningfulName(path: "/1/2/3") == nil)
+    }
+}

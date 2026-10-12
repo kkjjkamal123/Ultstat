@@ -23,7 +23,7 @@ enum DashboardTab: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .cpu: "cpu"
-        case .gpu: "rectangle.3.group"
+        case .gpu: "display"
         case .memory: "memorychip"
         case .network: "arrow.up.arrow.down"
         case .disk: "internaldrive"
@@ -56,10 +56,7 @@ struct DashboardView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .focusEffectDisabled()   // a click-driven panel; no keyboard focus rings
+        .focusEffectDisabled()   // the panel behind is Liquid Glass (DashboardPanel)   // a click-driven panel; no keyboard focus rings
     }
 
     private var header: some View {

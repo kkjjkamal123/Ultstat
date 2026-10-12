@@ -17,6 +17,8 @@ final class DashboardPanel: NSPanel {
 
     private let panelWidth: CGFloat
     private let fitsContent: Bool
+    private var host = NSView()
+    static let cornerRadius: CGFloat = 22
 
     init(rootView: some View, width: CGFloat = DashboardPanel.size.width, fitsContent: Bool = false) {
         panelWidth = width
@@ -35,7 +37,13 @@ final class DashboardPanel: NSPanel {
         animationBehavior = .utilityWindow
         let host = NSHostingView(rootView: rootView)
         host.sizingOptions = []
-        contentView = host
+        self.host = host
+        // macOS 26 Liquid Glass behind everything the panel shows.
+        let glass = NSGlassEffectView()
+        glass.cornerRadius = Self.cornerRadius
+        glass.style = .regular
+        glass.contentView = host
+        contentView = glass
     }
 
     override var canBecomeKey: Bool { true }
@@ -46,7 +54,7 @@ final class DashboardPanel: NSPanel {
         let visible = screen.visibleFrame
         let margin: CGFloat = 8
         // Module panels size to their content (like Stats); the summary dashboard uses its fixed size.
-        let fitting = contentView?.fittingSize.height ?? 0
+        let fitting = host.fittingSize.height
         let wanted = fitsContent && fitting > 100 ? fitting : Self.size.height
         let height = min(wanted, visible.height - margin * 2)
         let width = panelWidth

@@ -127,6 +127,14 @@ public final class ProcessSampler: Sampler {
         if let top { onUpdate(top) }
     }
 
+    /// The last path component that contains letters and isn't a generic folder ("versions", "bin").
+    static func meaningfulName(path: String) -> String? {
+        let generic: Set<String> = ["versions", "version", "bin", "sbin", "libexec", "macos", "contents", "current", "latest"]
+        return path.split(separator: "/").reversed().map(String.init).first {
+            $0.contains(where: \.isLetter) && !generic.contains($0.lowercased())
+        }
+    }
+
     /// Names are resolved only for the processes shown, and cached per pid.
     private func name(pid: Int32, cache: inout [Int32: String]) -> String {
         if let n = cache[pid] { return n }
@@ -139,6 +147,15 @@ public final class ProcessSampler: Sampler {
             if proc_pidpath(pid, &path, UInt32(path.count)) > 0 {
                 let full = String(decoding: path.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
                 n = full.split(separator: "/").last.map(String.init) ?? full
+            }
+        }
+        // Tools installed as ".../name/versions/2.1.296" have a version number as their executable
+        // name; show the nearest meaningful folder name instead.
+        if !n.isEmpty, !n.contains(where: \.isLetter) {
+            var path = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+            if proc_pidpath(pid, &path, UInt32(path.count)) > 0 {
+                let full = String(decoding: path.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+                n = Self.meaningfulName(path: full) ?? n
             }
         }
         if n.isEmpty { n = "pid \(pid)" }

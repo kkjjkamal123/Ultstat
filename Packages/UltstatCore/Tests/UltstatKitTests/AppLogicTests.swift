@@ -46,20 +46,21 @@ import UltstatCore
         return r
     }
 
-    /// Values take only the room they need ("8%" is narrower than "88%"), and the default label is
-    /// the plain name drawn above the value, not a symbol.
-    @Test func valuesAreTightAndNamed() {
+    /// Default look follows Stats: the name above the value in a fixed 31 pt widget, so one- and
+    /// two-digit values don't shift neighbouring items; turning names off makes it narrower.
+    @Test func namedWidgetsHaveStableWidth() {
         let s = AppSettings.Stored(items: [.cpu])
         let segs = MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.08), settings: s)
         #expect(segs.first?.content == .labeled(caption: "CPU", value: "8%"))
         #expect(segs.first?.symbol == nil)
-        let narrow = MenuBarRenderer.image(for: segs, scale: 2).size.width
-        let wide = MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.88), settings: s), scale: 2).size.width
-        #expect(narrow < wide)
+        let widths = [0.0, 0.08, 0.88].map { v -> CGFloat in
+            MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: Float(v)), settings: s), scale: 2).size.width
+        }
+        #expect(Set(widths).count == 1, "\(widths)")
         var bare = s
         bare.itemLabel = .none
         let unnamed = MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.08), settings: bare), scale: 2).size.width
-        #expect(unnamed < narrow)
+        #expect(unnamed < widths[1])
     }
 
     @Test func missingDataStillRenders() {

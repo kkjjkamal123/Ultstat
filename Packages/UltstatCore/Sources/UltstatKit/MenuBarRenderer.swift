@@ -62,17 +62,19 @@ public enum MenuBarRenderer {
     private static let spacing: CGFloat = 8
     private static let iconGap: CGFloat = 3
 
-    private static let font = NSFont.monospacedDigitSystemFont(ofSize: 12.5, weight: .medium)
+    private static let font = NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .medium)
     private static let smallFont = NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .semibold)
     private static let symbolConfig = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
     private static let textAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.black]
     private static let smallAttrs: [NSAttributedString.Key: Any] = [.font: smallFont, .foregroundColor: NSColor.black]
-    private static let captionAttrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.systemFont(ofSize: 8.5, weight: .semibold), .foregroundColor: NSColor.black, .kern: 0.2,
-    ]
-    private static let valueAttrs: [NSAttributedString.Key: Any] = [
-        .font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold), .foregroundColor: NSColor.black,
-    ]
+    // Sizes follow Stats' "Mini" widget (label 7 pt light over a 12 pt value, 31 pt wide),
+    // measured from its source; the numbers are facts, not copied code.
+    private static let captionFont = NSFont.systemFont(ofSize: 7, weight: .light)
+    private static let valueFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)
+    private static let captionAttrs: [NSAttributedString.Key: Any] = [.font: captionFont, .foregroundColor: NSColor.black]
+    private static let valueAttrs: [NSAttributedString.Key: Any] = [.font: valueFont, .foregroundColor: NSColor.black]
+    /// Minimum width of a caption-over-value widget, so values don't shift as digits change.
+    private static let labeledWidth: CGFloat = 31
     private static let batteryNumberFont = NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .bold)
     private static let batteryBody = NSSize(width: 27, height: 13)
     private static var symbols: [String: NSImage] = [:]
@@ -138,7 +140,8 @@ public enum MenuBarRenderer {
                 return Segment(symbol: icon, content: .text(MetricFormat.watts(w)), slot: "88.8W")
             case .battery:
                 guard let b = r.battery else { return nil }
-                return Segment(symbol: nil, content: .battery(percent: b.percent, charging: b.isCharging, time: BatteryTime.compact(b),
+                return Segment(symbol: nil, content: .battery(percent: b.percent, charging: b.isCharging,
+                                                              time: BatteryTime.compact(b, systemWatts: r.systemPower),
                                                               pluggedIn: b.externalConnected),
                                slot: "8:88")
             }
@@ -226,7 +229,7 @@ public enum MenuBarRenderer {
         case .bar: 6
         case .sparkline: sparklineWidth
         case .labeled(let caption, let value):
-            max(textWidth(caption, attrs: captionAttrs), textWidth(value, attrs: valueAttrs))
+            max(labeledWidth, textWidth(caption, attrs: captionAttrs), textWidth(value, attrs: valueAttrs))
         case .battery(_, _, let time, _):
             batteryBody.width + 2.5 + 5 + max(textWidth(seg.slot, attrs: textAttrs), textWidth(time, attrs: textAttrs))
         }
@@ -274,10 +277,10 @@ public enum MenuBarRenderer {
         case .sparkline(let values):
             drawSparkline(values, in: NSRect(x: x, y: 3, width: sparklineWidth, height: height - 6))
         case .labeled(let caption, let value):
-            let vs = (value as NSString).size(withAttributes: valueAttrs)
-            let cs = (caption as NSString).size(withAttributes: captionAttrs)
-            (caption as NSString).draw(at: NSPoint(x: x, y: height - cs.height + 1), withAttributes: captionAttrs)
-            (value as NSString).draw(at: NSPoint(x: x, y: -1.5 + (vs.height < 16 ? 0 : 0)), withAttributes: valueAttrs)
+            // Baselines as in Stats: value 3 pt and caption 14 pt above the bottom of a 22 pt bar.
+            // draw(at:) takes the line's bottom-left, so offset by the (negative) descender.
+            (value as NSString).draw(at: NSPoint(x: x, y: 3 + valueFont.descender), withAttributes: valueAttrs)
+            (caption as NSString).draw(at: NSPoint(x: x, y: 14 + captionFont.descender), withAttributes: captionAttrs)
         case .battery(let percent, let charging, let time, _):
             drawBattery(percent: percent, charging: charging, at: NSPoint(x: x, y: (height - batteryBody.height) / 2))
             let tx = x + batteryBody.width + 2.5 + 5
@@ -292,11 +295,12 @@ public enum MenuBarRenderer {
     public static func coloredBattery(percent: Int, charging: Bool, lowPower: Bool, time: String, textColor: CGColor,
                                       scale: CGFloat, pluggedIn: Bool = false) -> (image: CGImage, size: CGSize)? {
         // Sized like the system battery icon.
-        let bodySize = NSSize(width: 26.5, height: 13)
+        let bodySize = NSSize(width: 22, height: 12)   // Stats' battery size
         // No estimate (on the adapter but not charging, or still measuring): show no time at all.
         let time = ["--", "–", "—", "-"].contains(time.trimmingCharacters(in: .whitespaces)) ? "" : time
         let gap: CGFloat = time.isEmpty ? 0 : 4
-        let tAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(cgColor: textColor) ?? .labelColor]
+        let tAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular),
+                                                     .foregroundColor: NSColor(cgColor: textColor) ?? .labelColor]
         let tSize = (time as NSString).size(withAttributes: tAttrs)
         let slot = time.isEmpty ? 0 : max(ceil(tSize.width), ceil(("8:88" as NSString).size(withAttributes: tAttrs).width))
         let plugImage = pluggedIn && !charging
@@ -311,7 +315,7 @@ public enum MenuBarRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         let body = NSRect(x: 0, y: (height - bodySize.height) / 2, width: bodySize.width, height: bodySize.height)
-        let radius: CGFloat = 3.8
+        let radius: CGFloat = 3.3
         let text = NSColor(cgColor: textColor) ?? .labelColor
         text.withAlphaComponent(0.35).setFill()
         NSBezierPath(roundedRect: body, xRadius: radius, yRadius: radius).fill()
@@ -329,7 +333,7 @@ public enum MenuBarRenderer {
         // Dark number on a light fill, light on a dark fill (normal state in a light menu bar).
         let numberColor: NSColor = fillColor.brightnessComponentSafe > 0.55 ? NSColor(white: 0.08, alpha: 1) : .white
         let n = (charging ? "⚡︎" : "") + "\(percent)"
-        let nAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 9.8, weight: .bold), .foregroundColor: numberColor]
+        let nAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 8, weight: .bold), .foregroundColor: numberColor]
         let nSize = (n as NSString).size(withAttributes: nAttrs)
         (n as NSString).draw(at: NSPoint(x: body.midX - nSize.width / 2, y: body.midY - nSize.height / 2), withAttributes: nAttrs)
         if let plug = plugImage {
