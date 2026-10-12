@@ -2,23 +2,80 @@ import SwiftUI
 import UltstatCore
 import UltstatKit
 
+enum SettingsSection: Int, CaseIterable, Identifiable, Hashable {
+    case general, menuBar, battery, alerts, about
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .menuBar: "Menu Bar"
+        case .battery: "Battery"
+        case .alerts: "Alerts"
+        case .about: "About"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape.fill"
+        case .menuBar: "menubar.rectangle"
+        case .battery: "battery.75percent"
+        case .alerts: "bell.badge.fill"
+        case .about: "info.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .general: .gray
+        case .menuBar: .blue
+        case .battery: .green
+        case .alerts: .red
+        case .about: .indigo
+        }
+    }
+}
+
+/// System Settings-style window: icon sidebar on the left, the selected page on the right.
 struct SettingsView: View {
-    @State private var tab: Int
+    @State private var section: SettingsSection?
 
     init(initialTab: Int = 0) {
-        _tab = State(initialValue: initialTab)
+        _section = State(initialValue: SettingsSection(rawValue: initialTab) ?? .general)
     }
 
     var body: some View {
-        TabView(selection: $tab) {
-            Tab("General", systemImage: "gearshape", value: 0) { GeneralSettings() }
-            Tab("Menu Bar", systemImage: "menubar.rectangle", value: 1) { MenuBarSettings() }
-            Tab("Battery", systemImage: "battery.75percent", value: 2) { BatterySettings() }
-            Tab("Alerts", systemImage: "bell.badge", value: 3) { AlertSettings() }
-            Tab("About", systemImage: "info.circle", value: 4) { AboutSettings() }
+        NavigationSplitView {
+            List(SettingsSection.allCases, selection: $section) { s in
+                HStack(spacing: 9) {
+                    Image(systemName: s.symbol)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(s.tint.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    Text(s.title)
+                }
+                .tag(s)
+                .accessibilityIdentifier("settings.section.\(s.rawValue)")
+            }
+            .listStyle(.sidebar)
+            .navigationSplitViewColumnWidth(min: 170, ideal: 180, max: 220)
+        } detail: {
+            Group {
+                switch section ?? .general {
+                case .general: GeneralSettings()
+                case .menuBar: MenuBarSettings()
+                case .battery: BatterySettings()
+                case .alerts: AlertSettings()
+                case .about: AboutSettings()
+                }
+            }
+            .navigationTitle((section ?? .general).title)
         }
-        .frame(width: 520, height: 460)
-        .onAppear { SettingsTabDriver.select = { tab = $0 } }
+        .frame(minWidth: 700, idealWidth: 720, minHeight: 500, idealHeight: 540)
+        .onAppear { SettingsTabDriver.select = { section = SettingsSection(rawValue: $0) } }
         .onDisappear { SettingsTabDriver.select = nil }
     }
 }
@@ -34,8 +91,10 @@ private struct GeneralSettings: View {
             if let e = model.generalError {
                 Text(e).font(.callout).foregroundStyle(Theme.critical)
             }
-            Picker("Update every", selection: $settings.stored.interval) {
-                ForEach([1, 2, 3, 5, 10], id: \.self) { Text("\($0) s").tag($0) }
+            Picker("Refresh every", selection: $settings.stored.interval) {
+                ForEach([0.5, 0.6, 1.0, 2.0, 3.0, 5.0], id: \.self) { v in
+                    Text(v < 1 ? "\(Int(v * 1000)) ms" : "\(Int(v)) s").tag(v)
+                }
             }
             .accessibilityIdentifier("settings.interval")
             Picker("Temperature", selection: $settings.stored.temperatureUnit) {
@@ -45,7 +104,10 @@ private struct GeneralSettings: View {
             Toggle("Show AirPods and Bluetooth headphone batteries", isOn: $settings.stored.bluetoothAccessories)
                 .accessibilityIdentifier("settings.bluetooth")
             Section {
-                Text("Longer intervals use less power. Ultstat stops sampling entirely while the display is off and only reads metrics that are visible.")
+                Text("""
+                    Faster refresh costs more power: about 1 ms of CPU per second at 2 s, roughly 3× that at 600 ms. \
+                    Ultstat stops sampling entirely while the display is off and only reads metrics that are visible.
+                    """)
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {
@@ -63,6 +125,11 @@ private struct MenuBarSettings: View {
     var body: some View {
         @Bindable var settings = model.settings
         Form {
+            Section {
+                MenuBarPreview()
+            } header: {
+                Text("Preview")
+            }
             Section("Show in menu bar") {
                 ForEach(MenuBarItem.allCases) { item in
                     HStack(spacing: 12) {
@@ -87,7 +154,7 @@ private struct MenuBarSettings: View {
                     }
                 }
             }
-            Toggle("Show icons", isOn: $settings.stored.showIcons)
+            Toggle("Show icons (Text, Bar and Graph styles)", isOn: $settings.stored.showIcons)
             Toggle("Combine into one menu bar item", isOn: $settings.stored.combineMenuBar)
                 .accessibilityIdentifier("settings.combine")
         }
@@ -322,5 +389,27 @@ private struct AboutSettings: View {
             Link("github.com/kkjjkamal23/Ultstat", destination: URL(string: "https://github.com/kkjjkamal23/Ultstat")!)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// Live preview of the menu-bar items as currently configured.
+private struct MenuBarPreview: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var scheme
+
+    var body: some View {
+        let s = model.settings.stored
+        let segs = MenuBarRenderer.segments(for: s.items, readings: model.readings, settings: s, histories: model.menuBarHistories())
+        let tint = (scheme == .dark ? NSColor.white : NSColor.black).cgColor
+        HStack {
+            Spacer()
+            if let (img, size) = MenuBarRenderer.cgImage(for: segs, scale: 2, tint: tint) {
+                Image(decorative: img, scale: 2).frame(width: size.width, height: size.height)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 8)
+        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityLabel("Menu bar preview")
     }
 }

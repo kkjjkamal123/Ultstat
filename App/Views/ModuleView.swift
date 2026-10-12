@@ -507,8 +507,11 @@ private struct ChargeControlSection: View {
                 }
             }
         }
-        .disabled(!ready)
         .font(.system(size: 12.5))
+        if !ready, model.settings.stored.chargeControlEnabled {
+            Text("Your choices are saved and apply as soon as the helper is ready.")
+                .font(.system(size: 10.5)).foregroundStyle(.tertiary)
+        }
     }
 
     private func actionButton(_ title: String, _ symbol: String, active: Bool, action: @escaping () -> Void) -> some View {

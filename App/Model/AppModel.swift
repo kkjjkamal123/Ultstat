@@ -104,7 +104,7 @@ final class AppModel {
         }
     }
 
-    private var appliedInterval: Int?
+    private var appliedInterval: Double?
 
     private func applySettings() {
         let s = settings.stored
@@ -158,7 +158,7 @@ final class AppModel {
                         r.componentPower = c
                     }
                 }
-                try? await Task.sleep(for: .seconds(max(2, self.settings.stored.interval)))
+                try? await Task.sleep(for: .seconds(max(2.0, self.settings.stored.interval)))
             }
         }
     }

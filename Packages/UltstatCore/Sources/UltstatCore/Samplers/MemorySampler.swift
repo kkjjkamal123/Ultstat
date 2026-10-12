@@ -60,7 +60,7 @@ public final class MemorySampler: Sampler {
         onUpdate(usage)
     }
 
-    func read() -> MemoryUsage? {
+    public func read() -> MemoryUsage? {
         var stats = vm_statistics64_data_t()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
         let kr = withUnsafeMutablePointer(to: &stats) {

@@ -23,6 +23,7 @@ let package = Package(
         ),
         .target(name: "UltstatKit", dependencies: ["UltstatCore"]),
         .executableTarget(name: "ultstat-smc", dependencies: ["UltstatCore"]),
+        .executableTarget(name: "ultstat-verify", dependencies: ["UltstatCore"]),
         .executableTarget(name: "ultstat-bench", dependencies: ["UltstatCore", "CPrivate"]),
         .testTarget(name: "UltstatCoreTests", dependencies: ["UltstatCore"]),
         .testTarget(name: "UltstatKitTests", dependencies: ["UltstatKit", "UltstatCore"]),

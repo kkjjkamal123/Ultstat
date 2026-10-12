@@ -79,9 +79,9 @@ final class StatusItemController: NSObject {
         button.effectiveAppearance.performAsCurrentDrawingAppearance { tint = NSColor.labelColor.cgColor }
         let scale = button.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         let rendered: (image: CGImage, size: CGSize)?
-        if metric == .battery, segs.count == 1, case .battery(let pct, let charging, let time) = segs[0].content {
+        if metric == .battery, segs.count == 1, case .battery(let pct, let charging, let time, let plugged) = segs[0].content {
             rendered = MenuBarRenderer.coloredBattery(percent: pct, charging: charging, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
-                                                      time: time, textColor: tint, scale: scale)
+                                                      time: time, textColor: tint, scale: scale, pluggedIn: plugged)
         } else {
             rendered = MenuBarRenderer.cgImage(for: segs, scale: scale, tint: tint)
         }
@@ -108,7 +108,7 @@ final class StatusItemController: NSObject {
             case .bar(let v): MetricFormat.percent(v)
             case .sparkline(let v): v.last.map(MetricFormat.percent) ?? ""
             case .labeled(let c, let v): "\(c) \(v)"
-            case .battery(let p, _, let t): "Battery \(p)% \(t)"
+            case .battery(let p, _, let t, _): "Battery \(p)% \(t)"
             }
         }.joined(separator: ", "))
     }
@@ -135,6 +135,9 @@ final class StatusItemController: NSObject {
             panel.dismiss()
             return
         }
+        // A click on this icon while the panel is open first reaches the panel's "click outside"
+        // monitor (on mouse-down), which closes it; the same click's mouse-up must not reopen it.
+        if let closed = panel?.lastDismissed, Date().timeIntervalSince(closed) < 0.4 { return }
         let t0 = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
         // Built once and kept: it reads `panelReadings`, which only change while it is visible.
         model.closeAllPanels()   // one panel at a time

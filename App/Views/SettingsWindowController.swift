@@ -28,7 +28,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         // focus, so clicks only tried to activate the app and never reached the controls.
         let w = SettingsPanel(contentViewController: host)
         w.title = "Ultstat Settings"
-        w.styleMask = [.titled, .closable, .nonactivatingPanel]
+        w.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView, .nonactivatingPanel]
+        w.titlebarAppearsTransparent = true
+        w.toolbarStyle = .unified
+        w.setContentSize(NSSize(width: 720, height: 540))
         w.becomesKeyOnlyIfNeeded = false
         w.isFloatingPanel = false
         w.hidesOnDeactivate = false

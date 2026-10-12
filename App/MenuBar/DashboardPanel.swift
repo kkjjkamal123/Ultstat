@@ -12,6 +12,8 @@ final class DashboardPanel: NSPanel {
     private var outsideClickMonitor: Any?
     private var keyMonitor: Any?
     var onClose: (() -> Void)?
+    /// When the panel last closed (used to tell "click the icon to close" from "click to open").
+    private(set) var lastDismissed: Date?
 
     private let panelWidth: CGFloat
     private let fitsContent: Bool
@@ -71,6 +73,7 @@ final class DashboardPanel: NSPanel {
 
     func dismiss() {
         guard isVisible else { return }
+        lastDismissed = Date()
         removeMonitors()
         orderOut(nil)
         onClose?()

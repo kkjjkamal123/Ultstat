@@ -31,7 +31,7 @@ public struct Segment: Equatable, Sendable {
         /// Small caption over a bold value ("CPU" over "7%").
         case labeled(caption: String, value: String)
         /// Battery glyph with the percentage knocked out of the fill, then time remaining.
-        case battery(percent: Int, charging: Bool, time: String)
+        case battery(percent: Int, charging: Bool, time: String, pluggedIn: Bool = false)
     }
 
     public var symbol: String?
@@ -122,7 +122,8 @@ public enum MenuBarRenderer {
                 return Segment(symbol: icon, content: .text(MetricFormat.watts(w)), slot: "88.8W")
             case .battery:
                 guard let b = r.battery else { return nil }
-                return Segment(symbol: nil, content: .battery(percent: b.percent, charging: b.isCharging, time: BatteryTime.compact(b)),
+                return Segment(symbol: nil, content: .battery(percent: b.percent, charging: b.isCharging, time: BatteryTime.compact(b),
+                                                              pluggedIn: b.externalConnected),
                                slot: "8:88")
             }
         }
@@ -208,7 +209,7 @@ public enum MenuBarRenderer {
         case .sparkline: sparklineWidth
         case .labeled(let caption, let value):
             max(textWidth(caption, attrs: captionAttrs), textWidth(seg.slot, attrs: valueAttrs), textWidth(value, attrs: valueAttrs))
-        case .battery(_, _, let time):
+        case .battery(_, _, let time, _):
             batteryBody.width + 2.5 + 5 + max(textWidth(seg.slot, attrs: textAttrs), textWidth(time, attrs: textAttrs))
         }
     }
@@ -253,7 +254,7 @@ public enum MenuBarRenderer {
             let cs = (caption as NSString).size(withAttributes: captionAttrs)
             (caption as NSString).draw(at: NSPoint(x: x, y: height - cs.height + 1), withAttributes: captionAttrs)
             (value as NSString).draw(at: NSPoint(x: x, y: -1.5 + (vs.height < 16 ? 0 : 0)), withAttributes: valueAttrs)
-        case .battery(let percent, let charging, let time):
+        case .battery(let percent, let charging, let time, _):
             drawBattery(percent: percent, charging: charging, at: NSPoint(x: x, y: (height - batteryBody.height) / 2))
             let tx = x + batteryBody.width + 2.5 + 5
             let ts = (time as NSString).size(withAttributes: textAttrs)
@@ -265,13 +266,18 @@ public enum MenuBarRenderer {
     /// yellow in Low Power Mode, green while charging, red when low), the number inside in dark
     /// text, a translucent remainder and cap, then time remaining in the menu-bar text colour.
     public static func coloredBattery(percent: Int, charging: Bool, lowPower: Bool, time: String, textColor: CGColor,
-                                      scale: CGFloat) -> (image: CGImage, size: CGSize)? {
-        let bodySize = NSSize(width: 29, height: 14)
-        let gap: CGFloat = 5
+                                      scale: CGFloat, pluggedIn: Bool = false) -> (image: CGImage, size: CGSize)? {
+        // Sized like the system battery icon.
+        let bodySize = NSSize(width: 26.5, height: 13)
+        let gap: CGFloat = 4
         let tAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(cgColor: textColor) ?? .labelColor]
         let tSize = (time as NSString).size(withAttributes: tAttrs)
         let slot = max(ceil(tSize.width), ceil(("8:88" as NSString).size(withAttributes: tAttrs).width))
-        let size = NSSize(width: ceil(bodySize.width + 3 + gap + slot), height: height)
+        let plugImage = pluggedIn && !charging
+            ? NSImage(systemSymbolName: "powerplug.fill", accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 9, weight: .semibold))
+            : nil
+        let plugW: CGFloat = plugImage.map { ceil($0.size.width) + 3 } ?? 0
+        let size = NSSize(width: ceil(bodySize.width + 3 + plugW + gap + slot), height: height)
         guard let ctx = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8,
                                   bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
@@ -279,11 +285,11 @@ public enum MenuBarRenderer {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         let body = NSRect(x: 0, y: (height - bodySize.height) / 2, width: bodySize.width, height: bodySize.height)
-        let radius: CGFloat = 4.2
+        let radius: CGFloat = 3.8
         let text = NSColor(cgColor: textColor) ?? .labelColor
         text.withAlphaComponent(0.35).setFill()
         NSBezierPath(roundedRect: body, xRadius: radius, yRadius: radius).fill()
-        NSBezierPath(roundedRect: NSRect(x: body.maxX + 1.2, y: body.midY - 2.6, width: 2, height: 5.2), xRadius: 1, yRadius: 1).fill()
+        NSBezierPath(roundedRect: NSRect(x: body.maxX + 1.1, y: body.midY - 2.4, width: 1.8, height: 4.8), xRadius: 0.9, yRadius: 0.9).fill()
         let fillColor: NSColor = charging ? NSColor(srgbRed: 0.20, green: 0.80, blue: 0.35, alpha: 1)
             : lowPower ? NSColor(srgbRed: 1.0, green: 0.80, blue: 0.0, alpha: 1)
             : percent <= 20 ? NSColor(srgbRed: 1.0, green: 0.27, blue: 0.23, alpha: 1)
@@ -297,10 +303,20 @@ public enum MenuBarRenderer {
         // Dark number on a light fill, light on a dark fill (normal state in a light menu bar).
         let numberColor: NSColor = fillColor.brightnessComponentSafe > 0.55 ? NSColor(white: 0.08, alpha: 1) : .white
         let n = (charging ? "⚡︎" : "") + "\(percent)"
-        let nAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .bold), .foregroundColor: numberColor]
+        let nAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 9.8, weight: .bold), .foregroundColor: numberColor]
         let nSize = (n as NSString).size(withAttributes: nAttrs)
         (n as NSString).draw(at: NSPoint(x: body.midX - nSize.width / 2, y: body.midY - nSize.height / 2), withAttributes: nAttrs)
-        (time as NSString).draw(at: NSPoint(x: body.maxX + 3 + gap, y: (height - tSize.height) / 2), withAttributes: tAttrs)
+        if let plug = plugImage {
+            // On the adapter but not charging (held at a limit, or full): a small plug, like AlDente.
+            let tinted = NSImage(size: plug.size, flipped: false) { r in
+                plug.draw(in: r)
+                text.set()
+                r.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: NSRect(x: body.maxX + 4, y: (height - plug.size.height) / 2, width: plug.size.width, height: plug.size.height))
+        }
+        (time as NSString).draw(at: NSPoint(x: body.maxX + 3 + plugW + gap, y: (height - tSize.height) / 2), withAttributes: tAttrs)
         NSGraphicsContext.restoreGraphicsState()
         guard let img = ctx.makeImage() else { return nil }
         return (img, size)
@@ -365,7 +381,7 @@ public enum MenuBarRenderer {
         case .bar(let v): MetricFormat.percent(v)
         case .sparkline(let v): v.last.map(MetricFormat.percent) ?? ""
         case .labeled(let c, let v): "\(c) \(v)"
-        case .battery(let p, let charging, let t): "Battery \(p)%\(charging ? ", charging" : "")\(t == "--" ? "" : ", \(t) remaining")"
+        case .battery(let p, let charging, let t, _): "Battery \(p)%\(charging ? ", charging" : "")\(t == "--" ? "" : ", \(t) remaining")"
         }
     }
 }

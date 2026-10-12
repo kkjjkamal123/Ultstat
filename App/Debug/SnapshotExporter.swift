@@ -49,13 +49,14 @@ enum SnapshotExporter {
             let tint = (dark ? NSColor.white : NSColor.black).cgColor
             let pct = model.readings.battery?.percent ?? 82
             for (suffix, charging, low) in [("", false, false), ("-lowpower", false, true), ("-charging", true, false)] {
-                if let (img, _) = MenuBarRenderer.coloredBattery(percent: pct, charging: charging, lowPower: low, time: "2:15", textColor: tint, scale: 2) {
+                if let (img, _) = MenuBarRenderer.coloredBattery(percent: pct, charging: charging, lowPower: low, time: "2:15", textColor: tint, scale: 2,
+                                                                       pluggedIn: !charging) {
                     writeComposite(img, dark: dark, to: dir.appendingPathComponent("\(name)\(suffix).png"))
                 }
             }
         }
         for (tab, name) in ["general", "menubar", "battery", "alerts", "about"].enumerated() {
-            writeView(SettingsView(initialTab: tab).environment(model), size: NSSize(width: 520, height: 460), appearance: .darkAqua,
+            writeView(SettingsView(initialTab: tab).environment(model), size: NSSize(width: 720, height: 540), appearance: .darkAqua,
                       to: dir.appendingPathComponent("settings-\(name).png"))
         }
     }

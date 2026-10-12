@@ -26,11 +26,15 @@ import UltstatCore
     @Test func pluggedNotChargingStates() {
         #expect(BatteryTime.short(snap(plugged: true, charging: false, amps: 0)) == "Plugged in")
         #expect(BatteryTime.short(snap(plugged: true, charging: false, amps: 0, fully: true)) == "Charged")
-        #expect(BatteryTime.short(snap(plugged: false, charging: false, amps: -10)) == "On battery", "no load: no estimate")
+        #expect(BatteryTime.short(snap(plugged: false, charging: false, amps: -5)) == "On battery", "no load: no estimate")
     }
 
-    @Test func absurdEstimatesAreHidden() {
-        #expect(BatteryTime.short(snap(plugged: false, charging: false, amps: -1, toEmpty: 60 * 100)) == "On battery")
+    @Test func longEstimatesAreShown() {
+        #expect(BatteryTime.short(snap(plugged: false, charging: false, amps: -100, toEmpty: 60 * 26 + 5)) == "26h 05m left")
+        #expect(BatteryTime.compact(snap(plugged: false, charging: false, amps: -100, toEmpty: 60 * 26 + 5)) == "26:05")
+        // 3000 mAh at 40 mA ≈ 75 h: a light load still gets an estimate.
+        #expect(BatteryTime.minutes(snap(plugged: false, charging: false, amps: -40))?.minutes == 4500)
+        #expect(BatteryTime.short(snap(plugged: false, charging: false, amps: -1, toEmpty: 60 * 2000)) == "On battery", "beyond ~41 days is noise")
     }
 
     @Test func dischargingWhilePluggedShowsTimeLeft() {

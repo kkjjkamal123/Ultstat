@@ -8,16 +8,20 @@ public enum BatteryTime {
     public static func minutes(_ b: BatterySnapshot) -> (minutes: Int, toFull: Bool)? {
         // Discharging is decided by current flow, not the plug: a bypassed adapter (charge limiter
         // discharging to its limit) drains the battery while ExternalConnected stays true.
-        if !b.externalConnected || b.amperage < -50 {
+        if !b.externalConnected || b.amperage < -10 {
             if let m = b.minutesToEmpty, !b.externalConnected { return (m, false) }
-            guard b.amperage < -50, let remaining = b.remainingCapacity else { return nil }
+            // Very light loads (tens of mA) are exactly when time remaining is longest; still estimate.
+            guard b.amperage < -10, let remaining = b.remainingCapacity else { return nil }
             return (Int(Double(remaining) / Double(-b.amperage) * 60), false)
         }
         guard b.isCharging else { return nil }
         if let m = b.minutesToFull { return (m, true) }
-        guard b.amperage > 50, let full = b.fullChargeCapacity, let remaining = b.remainingCapacity, full > remaining else { return nil }
+        guard b.amperage > 10, let full = b.fullChargeCapacity, let remaining = b.remainingCapacity, full > remaining else { return nil }
         return (Int(Double(full - remaining) / Double(b.amperage) * 60), true)
     }
+
+    /// Longest estimate shown (~41 days); beyond that the gauge's current reading is noise.
+    static let maxMinutes = 60 * 999
 
     public static func format(minutes m: Int) -> String {
         let h = m / 60, mm = m % 60
@@ -26,17 +30,17 @@ public enum BatteryTime {
 
     /// Menu-bar form, like AlDente: "3:05", or "--" without an estimate.
     public static func compact(_ b: BatterySnapshot) -> String {
-        guard let (m, _) = minutes(b), m > 0, m < 60 * 48 else { return "--" }
+        guard let (m, _) = minutes(b), m > 0, m <= maxMinutes else { return "--" }
         return "\(m / 60):\(String(format: "%02d", m % 60))"
     }
 
     /// Short line for the summary tile: "3h 05m left", "Full in 42m", "Plugged in".
     public static func short(_ b: BatterySnapshot) -> String {
-        if let (m, toFull) = minutes(b), m > 0, m < 60 * 48 {
+        if let (m, toFull) = minutes(b), m > 0, m <= maxMinutes {
             return toFull ? "Full in \(format(minutes: m))" : "\(format(minutes: m)) left"
         }
         if !b.externalConnected { return "On battery" }
-        if b.amperage < -50 { return "Discharging" }
+        if b.amperage < -10 { return "Discharging" }
         if b.isCharging { return "Charging" }
         return b.fullyCharged ? "Charged" : "Plugged in"
     }

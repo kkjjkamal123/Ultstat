@@ -63,7 +63,8 @@ public final class AppSettings {
 
         public var items: [MenuBarItem] = [.cpu, .gpu, .memory, .temperature, .power, .battery]
         public var styles: [MenuBarItem: WidgetStyle] = [.cpu: .labeled, .gpu: .labeled, .memory: .labeled, .temperature: .labeled, .power: .labeled]
-        public var interval: Int = 2
+        /// Refresh interval in seconds (fractional: 0.6 = 600 ms).
+        public var interval: Double = 0.6
         public var temperatureUnit: TemperatureUnit = .celsius
         public var showIcons: Bool = true
         public var chargePolicy = ChargePolicy(limit: 80, sailingRange: 5)
@@ -94,7 +95,8 @@ public final class AppSettings {
             let d = Stored()
             items = (try? c.decodeIfPresent([MenuBarItem].self, forKey: .items)) ?? d.items
             styles = (try? c.decodeIfPresent([MenuBarItem: WidgetStyle].self, forKey: .styles)) ?? d.styles
-            interval = (try? c.decodeIfPresent(Int.self, forKey: .interval)) ?? d.interval
+            // Older versions stored whole seconds as Int; Double decoding accepts both.
+            interval = (try? c.decodeIfPresent(Double.self, forKey: .interval)).flatMap { $0 }.map { min(max($0, 0.5), 10) } ?? d.interval
             temperatureUnit = (try? c.decodeIfPresent(TemperatureUnit.self, forKey: .temperatureUnit)) ?? d.temperatureUnit
             showIcons = (try? c.decodeIfPresent(Bool.self, forKey: .showIcons)) ?? d.showIcons
             chargePolicy = (try? c.decodeIfPresent(ChargePolicy.self, forKey: .chargePolicy)) ?? d.chargePolicy

@@ -31,9 +31,11 @@ final class MonitorHub {
     private var menuItems: Set<MenuBarItem> = []
     private var workspaceObservers: [NSObjectProtocol] = []
 
-    init(bus: ReadingsBus, interval: Int, bluetoothAccessories: Bool) {
+    init(bus: ReadingsBus, interval: Double, bluetoothAccessories: Bool) {
         self.bus = bus
-        scheduler = Scheduler(configuration: .init(interval: .seconds(interval), leewayFraction: 0.25))
+        // 10 % leeway: enough for the kernel to coalesce wakeups, tight enough that a 600 ms
+        // refresh actually lands every ~600 ms.
+        scheduler = Scheduler(configuration: .init(interval: .milliseconds(Int(interval * 1000)), leewayFraction: 0.1))
         cpu = CPUSampler { v in bus.update { $0.cpu = v } }
         memory = MemorySampler { v in bus.update { $0.memory = v } }
         network = NetworkSampler { v in bus.update { $0.network = v } }
@@ -105,8 +107,8 @@ final class MonitorHub {
         }
     }
 
-    func setInterval(_ seconds: Int) {
-        scheduler.setInterval(.seconds(max(1, seconds)))
+    func setInterval(_ seconds: Double) {
+        scheduler.setInterval(.milliseconds(Int(max(0.5, seconds) * 1000)))
     }
 
     private func tokens(for item: MenuBarItem) -> [DemandToken] {
