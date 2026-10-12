@@ -59,6 +59,12 @@ final class HelperClient {
         return try? PropertyListDecoder().decode(ChargeStatus.self, from: d)
     }
 
+    func componentPower() async -> ComponentPower? {
+        let data: Data?? = await call { proxy, done in proxy.componentPower { done($0) } }
+        guard let d = data.flatMap({ $0 }) else { return nil }
+        return try? PropertyListDecoder().decode(ComponentPower.self, from: d)
+    }
+
     func restoreDefaults() async -> String? {
         await call { proxy, done in proxy.restoreDefaults { done($0) } } ?? "helper not reachable"
     }

@@ -19,8 +19,12 @@ final class AppModel {
     @ObservationIgnored var statusItem: StatusItemController?
     @ObservationIgnored var openSettingsAction: (() -> Void)?
 
+    @ObservationIgnored private var bus: ReadingsBus!
+    @ObservationIgnored private var helperPowerTask: Task<Void, Never>?
+
     init() {
         let bus = ReadingsBus { [weak self] r in self?.receive(r) }
+        self.bus = bus
         hub = MonitorHub(bus: bus, interval: settings.stored.interval, bluetoothAccessories: settings.stored.bluetoothAccessories)
         applySettings()
         helperState = helper.state
@@ -64,11 +68,35 @@ final class AppModel {
         popoverOpen = true
         hub.setDetailVisible(true)
         Task { await refreshHelper() }
+        startHelperPower()
     }
 
     func popoverClosed() {
         popoverOpen = false
         hub.setDetailVisible(false)
+        helperPowerTask?.cancel()
+        helperPowerTask = nil
+    }
+
+    /// CPU/ANE/DRAM energy is root-only on macOS 27; ask the helper while the popover is open.
+    private func startHelperPower() {
+        helperPowerTask?.cancel()
+        helperPowerTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self, self.helperState == .running else { return }
+                if let p = await self.helper.componentPower() {
+                    self.bus.update { r in
+                        var c = r.componentPower ?? ComponentPower(cpu: nil, gpu: nil, ane: nil, dram: nil)
+                        c.cpu = p.cpu
+                        c.ane = p.ane
+                        c.dram = p.dram
+                        if c.gpu == nil { c.gpu = p.gpu }
+                        r.componentPower = c
+                    }
+                }
+                try? await Task.sleep(for: .seconds(max(2, self.settings.stored.interval)))
+            }
+        }
     }
 
     func openSettings() {

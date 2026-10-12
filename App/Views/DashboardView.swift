@@ -20,6 +20,7 @@ struct DashboardView: View {
                     networkCard(r)
                     diskCard(r)
                     if !r.sensors.isEmpty { sensorsCard(r) }
+                    if r.systemPower != nil || r.componentPower != nil { powerCard(r) }
                     if let b = r.battery { BatteryCard(b: b, systemPower: r.systemPower) }
                     if !r.fans.isEmpty { fansCard(r) }
                     if !r.accessories.isEmpty { accessoriesCard(r) }
@@ -178,6 +179,28 @@ struct DashboardView: View {
                     Text("\(a.percent)%").monospacedDigit()
                 }
                 .font(.system(size: 11))
+            }
+        }
+    }
+
+    private func powerCard(_ r: Readings) -> some View {
+        func w(_ v: Double?) -> String {
+            guard let v else { return "–" }
+            return v < 1 ? String(format: "%.0f mW", v * 1000) : String(format: "%.2f W", v)
+        }
+        let c = r.componentPower
+        return MetricCard(title: "Power", symbol: "bolt", value: r.systemPower.map { String(format: "%.1f W", $0) } ?? "–") {
+            HStack(spacing: 12) {
+                StatRow(label: "CPU", value: w(c?.cpu))
+                StatRow(label: "GPU", value: w(c?.gpu))
+            }
+            HStack(spacing: 12) {
+                StatRow(label: "Neural Engine", value: w(c?.ane))
+                StatRow(label: "DRAM", value: w(c?.dram))
+            }
+            if c?.cpu == nil {
+                Text("CPU, Neural Engine and DRAM power need the charge helper (macOS restricts these counters).")
+                    .font(.system(size: 9)).foregroundStyle(.tertiary)
             }
         }
     }

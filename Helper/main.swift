@@ -41,6 +41,17 @@ final class HelperService: NSObject, NSXPCListenerDelegate, UltstatHelperProtoco
         reply(try? PropertyListEncoder().encode(controller.status()))
     }
 
+    /// Created on first request so an idle helper never subscribes to IOReport.
+    private lazy var energy = EnergySampler(privileged: true)
+    private let energyLock = NSLock()
+
+    func componentPower(reply: @escaping @Sendable (Data?) -> Void) {
+        energyLock.lock()
+        let p = energy?.read()
+        energyLock.unlock()
+        reply(p.flatMap { try? PropertyListEncoder().encode($0) })
+    }
+
     func restoreDefaults(reply: @escaping @Sendable (String?) -> Void) {
         reply(controller.restoreDefaults())
     }

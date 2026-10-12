@@ -1,12 +1,19 @@
 import CPrivate
 import Synchronization
 
-public struct ComponentPower: Sendable, Equatable {
+public struct ComponentPower: Codable, Sendable, Equatable {
     /// Average watts over the last interval. nil where the OS hides the counter from this process.
     public var cpu: Double?
     public var gpu: Double?
     public var ane: Double?
     public var dram: Double?
+
+    public init(cpu: Double?, gpu: Double?, ane: Double?, dram: Double?) {
+        self.cpu = cpu
+        self.gpu = gpu
+        self.ane = ane
+        self.dram = dram
+    }
 }
 
 /// Per-component power from IOReport's "Energy Model" (what `powermetrics` reads).
@@ -32,6 +39,12 @@ public final class EnergySampler: Sampler, @unchecked Sendable {
     deinit { ult_energy_close(reader) }
 
     public var latest: ComponentPower? { state.withLock { $0 } }
+
+    /// Samples now and returns the average since the previous read (nil on the first call).
+    public func read() -> ComponentPower? {
+        sample(tick: 0)
+        return latest
+    }
 
     public func sample(tick: UInt64) {
         var s = ult_energy_sample()

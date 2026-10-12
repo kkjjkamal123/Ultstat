@@ -54,7 +54,13 @@ final class MonitorHub {
         }
         accessories = AccessorySampler(cadence: 15, includeBluetooth: bluetoothAccessories) { v in bus.update { $0.accessories = v } }
         processes = ProcessSampler { v in bus.update { $0.processes = v } }
-        energy = EnergySampler(privileged: false) { v in bus.update { $0.componentPower = v } }
+        energy = EnergySampler(privileged: false) { v in
+            bus.update { r in
+                var c = r.componentPower ?? ComponentPower(cpu: nil, gpu: nil, ane: nil, dram: nil)
+                c.gpu = v.gpu   // the app can only see GPU energy; CPU/ANE/DRAM come from the helper
+                r.componentPower = c
+            }
+        }
         battery = BatteryMonitor { v in bus.update { $0.battery = v } }
         battery?.start()
         observeSystemState()
