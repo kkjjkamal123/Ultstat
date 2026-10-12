@@ -79,7 +79,16 @@ final class AppModel {
 
     func refreshHelper() async {
         helperState = helper.state
-        if helperState == .running { chargeStatus = await helper.status() }
+        guard helperState == .running else { return }
+        chargeStatus = await helper.status()
+        // The helper advances calibration and clears top-up on its own; it is the source of truth for
+        // these transient fields, so a later edit here never resets progress it has made.
+        if let remote = chargeStatus?.policy, settings.stored.chargeControlEnabled {
+            var local = settings.stored.chargePolicy
+            local.calibration = remote.calibration
+            local.topUp = remote.topUp
+            if local != settings.stored.chargePolicy { settings.stored.chargePolicy = local }
+        }
     }
 
     func installHelper() {
@@ -94,6 +103,10 @@ final class AppModel {
 
     func updatePolicy(_ change: (inout ChargePolicy) -> Void) {
         var p = settings.stored.chargePolicy
+        if let remote = chargeStatus?.policy {   // keep the helper's progress unless the change overrides it
+            p.calibration = remote.calibration
+            p.topUp = remote.topUp
+        }
         change(&p)
         settings.stored.chargePolicy = p.validated()
         pushPolicy()

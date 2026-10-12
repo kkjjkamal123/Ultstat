@@ -1,3 +1,18 @@
+import Foundation
+
+/// Battery calibration: a full cycle so the fuel gauge relearns capacity.
+public enum CalibrationPhase: Codable, Equatable, Sendable {
+    /// Run down to `CalibrationPhase.floor` (adapter bypassed when connected).
+    case discharging
+    /// Charge to 100 %.
+    case charging
+    /// Stay at 100 % until the given date.
+    case holding(until: Date)
+
+    public static let floor = 15.0
+    public static let holdDuration: TimeInterval = 3600
+}
+
 /// What the user asked for. Always pass through `validated()` before acting on it.
 public struct ChargePolicy: Codable, Equatable, Sendable {
     /// Upper limit in percent. 100 disables limiting.
@@ -14,10 +29,12 @@ public struct ChargePolicy: Codable, Equatable, Sendable {
     public var useHardwarePercent: Bool
     /// MagSafe LED: 0 system default, 1 off, 3 green, 4 amber.
     public var magSafeLED: Int
+    /// Active calibration, if any. Overrides the limit until it finishes.
+    public var calibration: CalibrationPhase?
 
     public init(limit: Int = 80, sailingRange: Int = 5, dischargeAboveLimit: Bool = false,
                 heatProtection: Double? = nil, topUp: Bool = false, useHardwarePercent: Bool = false,
-                magSafeLED: Int = 0) {
+                magSafeLED: Int = 0, calibration: CalibrationPhase? = nil) {
         self.limit = limit
         self.sailingRange = sailingRange
         self.dischargeAboveLimit = dischargeAboveLimit
@@ -25,6 +42,7 @@ public struct ChargePolicy: Codable, Equatable, Sendable {
         self.topUp = topUp
         self.useHardwarePercent = useHardwarePercent
         self.magSafeLED = magSafeLED
+        self.calibration = calibration
     }
 
     public static let stock = ChargePolicy(limit: 100, sailingRange: 0)

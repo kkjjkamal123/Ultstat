@@ -252,6 +252,15 @@ struct BatteryCard: View {
         }
     }
 
+    private var calibrationText: String {
+        switch model.settings.stored.chargePolicy.calibration {
+        case .discharging: "Calibrating: discharging to 15%"
+        case .charging: "Calibrating: charging to 100%"
+        case .holding(let until): "Calibrating: holding until \(until.formatted(date: .omitted, time: .shortened))"
+        case nil: "Calibrating"
+        }
+    }
+
     private var stateText: String {
         if let mode = model.chargeStatus?.mode, model.settings.stored.chargeControlEnabled, b.externalConnected {
             switch mode {
@@ -260,6 +269,7 @@ struct BatteryCard: View {
             case .discharging: return "Discharging to limit"
             case .heatPaused: return "Paused: battery warm"
             case .toppingUp: return "Topping up"
+            case .calibrating: return calibrationText
             case .charging, .onBattery: break
             }
         }

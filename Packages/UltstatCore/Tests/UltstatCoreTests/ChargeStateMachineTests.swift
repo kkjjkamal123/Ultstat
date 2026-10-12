@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import UltstatCore
 
@@ -127,5 +128,49 @@ import Testing
                 }
             }
         }
+    }
+}
+
+@Suite struct CalibrationTests {
+    @Test func fullCycle() {
+        var m = ChargeStateMachine()
+        var p = ChargePolicy(limit: 80, calibration: .discharging)
+        let t0 = Date(timeIntervalSince1970: 1_000_000)
+        func step(_ pct: Double, plugged: Bool = true, at t: Date = t0) -> ChargeOutputs {
+            let o = m.step(policy: p, inputs: ChargeInputs(percent: pct, externalConnected: plugged), now: t)
+            if m.calibrationChanged { p.calibration = m.nextCalibration }
+            return o
+        }
+        #expect(step(90) == ChargeOutputs(allowCharging: false, discharge: true))
+        #expect(m.mode == .calibrating)
+        #expect(step(15) == .stock)
+        #expect(p.calibration == .charging)
+        #expect(step(60).allowCharging)
+        _ = step(100)
+        #expect(p.calibration == .holding(until: t0.addingTimeInterval(3600)))
+        #expect(step(100, at: t0.addingTimeInterval(1800)) == .stock, "holds at 100 % for the full hour")
+        _ = step(100, at: t0.addingTimeInterval(3600))
+        #expect(p.calibration == nil, "finished")
+        #expect(!step(100).allowCharging, "normal 80 % limit resumes")
+    }
+
+    @Test func dischargePhaseAdvancesOnBattery() {
+        var m = ChargeStateMachine()
+        let p = ChargePolicy(limit: 80, calibration: .discharging)
+        #expect(m.step(policy: p, inputs: ChargeInputs(percent: 14, externalConnected: false)) == .stock)
+        #expect(m.calibrationChanged && m.nextCalibration == .charging)
+    }
+
+    @Test func heatStillWinsDuringCalibration() {
+        var m = ChargeStateMachine()
+        let p = ChargePolicy(limit: 80, heatProtection: 40, calibration: .charging)
+        #expect(!m.step(policy: p, inputs: ChargeInputs(percent: 50, externalConnected: true, batteryTemperature: 42)).allowCharging)
+        #expect(m.mode == .heatPaused)
+    }
+
+    @Test func calibrationPolicyRoundTrips() throws {
+        let p = ChargePolicy(calibration: .holding(until: Date(timeIntervalSince1970: 42)))
+        let d = try PropertyListEncoder().encode(p)
+        #expect(try PropertyListDecoder().decode(ChargePolicy.self, from: d) == p)
     }
 }

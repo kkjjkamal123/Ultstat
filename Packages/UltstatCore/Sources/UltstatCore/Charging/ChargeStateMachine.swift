@@ -1,3 +1,5 @@
+import Foundation
+
 public enum ChargeMode: String, Codable, Sendable {
     /// No charger connected; nothing to control.
     case onBattery
@@ -13,6 +15,8 @@ public enum ChargeMode: String, Codable, Sendable {
     case heatPaused
     /// One-shot charge to 100 %.
     case toppingUp
+    /// Calibration cycle in progress.
+    case calibrating
 }
 
 public struct ChargeInputs: Equatable, Sendable {
@@ -48,16 +52,26 @@ public struct ChargeStateMachine: Sendable {
     public private(set) var mode: ChargeMode = .charging
     /// Set when a top-up completes so the owner can clear `policy.topUp` and persist it.
     public private(set) var topUpCompleted = false
+    /// Set when the calibration phase changed; the owner persists `nextCalibration`.
+    public private(set) var calibrationChanged = false
+    /// The calibration phase after this step (nil once finished).
+    public private(set) var nextCalibration: CalibrationPhase?
 
     public init(mode: ChargeMode = .charging) { self.mode = mode }
 
-    public mutating func step(policy raw: ChargePolicy, inputs: ChargeInputs) -> ChargeOutputs {
+    public mutating func step(policy raw: ChargePolicy, inputs: ChargeInputs, now: Date = Date()) -> ChargeOutputs {
         let policy = raw.validated()
         topUpCompleted = false
+        calibrationChanged = false
+        nextCalibration = policy.calibration
         let pct = inputs.percent
         let limit = Double(policy.limit)
 
         guard inputs.externalConnected else {
+            // On battery the pack discharges by itself, which also advances calibration.
+            if case .discharging = policy.calibration, inputs.percent <= CalibrationPhase.floor {
+                advance(to: .charging)
+            }
             mode = .onBattery
             return .stock
         }
@@ -69,6 +83,10 @@ public struct ChargeStateMachine: Sendable {
                 mode = .heatPaused
                 return ChargeOutputs(allowCharging: false, discharge: false)
             }
+        }
+
+        if let phase = policy.calibration {
+            return calibrate(phase, inputs: inputs, now: now)
         }
 
         if policy.topUp {
@@ -105,5 +123,36 @@ public struct ChargeStateMachine: Sendable {
 
         mode = .charging
         return .stock
+    }
+
+    // MARK: Calibration
+
+    private mutating func advance(to phase: CalibrationPhase?) {
+        nextCalibration = phase
+        calibrationChanged = true
+    }
+
+    private mutating func calibrate(_ phase: CalibrationPhase, inputs: ChargeInputs, now: Date) -> ChargeOutputs {
+        mode = .calibrating
+        switch phase {
+        case .discharging:
+            if inputs.percent <= CalibrationPhase.floor {
+                advance(to: .charging)
+                return .stock
+            }
+            return ChargeOutputs(allowCharging: false, discharge: true)
+        case .charging:
+            if inputs.percent >= 100 {
+                advance(to: .holding(until: now.addingTimeInterval(CalibrationPhase.holdDuration)))
+            }
+            return .stock
+        case .holding(let until):
+            if now >= until {
+                advance(to: nil)   // done; the next step applies the normal limit
+                mode = .holding
+                return ChargeOutputs(allowCharging: false, discharge: false)
+            }
+            return .stock
+        }
     }
 }

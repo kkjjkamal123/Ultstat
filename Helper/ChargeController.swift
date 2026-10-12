@@ -27,6 +27,8 @@ final class ChargeController: @unchecked Sendable {
     private var powerNotifier: io_object_t = 0
     private var rootPowerDomain: io_connect_t = 0
     private let batteryTempKeys: [SMCKey]
+    /// Fires when a calibration hold ends, in case no battery event arrives at that moment.
+    private var holdTimer: (any DispatchSourceTimer)?
 
     init() {
         let smc = try? SMC()
@@ -101,6 +103,23 @@ final class ChargeController: @unchecked Sendable {
             policy.topUp = false
             Self.savePolicy(policy)
         }
+        if machine.calibrationChanged {
+            policy.calibration = machine.nextCalibration
+            Self.savePolicy(policy)
+            log.info("calibration phase -> \(String(describing: self.policy.calibration), privacy: .public)")
+        }
+        scheduleHoldTimer()
+    }
+
+    private func scheduleHoldTimer() {
+        holdTimer?.cancel()
+        holdTimer = nil
+        guard case .holding(let until) = policy.calibration else { return }
+        let t = DispatchSource.makeTimerSource(queue: queue)
+        t.schedule(wallDeadline: .now() + max(1, until.timeIntervalSinceNow), leeway: .seconds(30))
+        t.setEventHandler { [weak self] in self?.evaluate() }
+        t.resume()
+        holdTimer = t
     }
 
     private func batteryTemperature() -> Double? {

@@ -167,3 +167,11 @@ final class FakeFloatSMC: SMCAccess, @unchecked Sendable {
         #expect(s.latest.allSatisfy { (0...100).contains($0.percent) })
     }
 }
+
+@Suite struct NativeCalibrationTargetTests {
+    @Test func calibrationDisablesTheNativeLimit() {
+        #expect(NativeLimitActuator.target(for: .stock, mode: .calibrating, policy: ChargePolicy(limit: 80), percent: 50) == nil)
+        #expect(NativeLimitActuator.target(for: ChargeOutputs(allowCharging: false, discharge: true), mode: .calibrating,
+                                           policy: ChargePolicy(limit: 80), percent: 90) == nil)
+    }
+}

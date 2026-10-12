@@ -116,8 +116,18 @@ private struct BatterySettings: View {
                     Stepper("Pause charging above \(Int(h))°C", value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
                 }
                 Toggle("Use gauge charge instead of macOS percentage", isOn: Binding(get: { policy.useHardwarePercent }, set: { v in model.updatePolicy { $0.useHardwarePercent = v } }))
-                Button("Top Up to 100% Once") { model.updatePolicy { $0.topUp = true } }
-                    .disabled(!model.settings.stored.chargeControlEnabled || policy.topUp)
+                HStack {
+                    Button("Top Up to 100% Once") { model.updatePolicy { $0.topUp = true } }
+                        .disabled(!model.settings.stored.chargeControlEnabled || policy.topUp)
+                    Spacer()
+                    if policy.calibration == nil {
+                        Button("Calibrate Battery…") { model.updatePolicy { $0.calibration = .discharging } }
+                            .disabled(!model.settings.stored.chargeControlEnabled)
+                            .help("Discharges to 15%, charges to 100%, holds for an hour, then returns to your limit. Takes several hours.")
+                    } else {
+                        Button("Stop Calibration") { model.updatePolicy { $0.calibration = nil } }
+                    }
+                }
             }
             .disabled(model.helperState != .running)
             Section("MagSafe LED") {

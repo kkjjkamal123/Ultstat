@@ -161,6 +161,9 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
         case .heatPaused:
             // Freeze at the current level: macOS won't charge above it.
             return max(ChargePolicy.limitRange.lowerBound, min(100, Int(percent.rounded(.down))))
+        case .calibrating:
+            // The cycle must reach 100 %; the discharge phase uses the adapter bypass (CHIE) instead.
+            return nil
         }
     }
 
