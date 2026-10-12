@@ -68,6 +68,15 @@ public final class AppSettings {
         public var chargeControlEnabled = false
         public var lowPowerSampling = true
         public var bluetoothAccessories = false
+        public var alerts: [AlertRule] = [
+            // Fixed IDs: defaults must be identical every time they are created.
+            AlertRule(id: UUID(uuidString: "6D7C3A10-0001-4C6E-9B1D-000000000001")!,
+                      metric: .batteryBelow, threshold: 15, enabled: false),
+            AlertRule(id: UUID(uuidString: "6D7C3A10-0002-4C6E-9B1D-000000000002")!,
+                      metric: .temperatureAbove, threshold: 95, sustain: 30, enabled: false),
+            AlertRule(id: UUID(uuidString: "6D7C3A10-0003-4C6E-9B1D-000000000003")!,
+                      metric: .cpuAbove, threshold: 90, sustain: 60, enabled: false),
+        ]
     }
 
     private static let key = "settings.v1"

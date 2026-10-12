@@ -29,7 +29,7 @@ enum SnapshotExporter {
             writeView(DashboardView().environment(model), size: NSSize(width: 340, height: 600), appearance: appearance,
                       to: dir.appendingPathComponent("\(name).png"))
         }
-        for (tab, name) in ["general", "menubar", "battery", "about"].enumerated() {
+        for (tab, name) in ["general", "menubar", "battery", "alerts", "about"].enumerated() {
             writeView(SettingsView(initialTab: tab).environment(model), size: NSSize(width: 520, height: 460), appearance: .darkAqua,
                       to: dir.appendingPathComponent("settings-\(name).png"))
         }

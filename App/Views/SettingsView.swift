@@ -14,7 +14,8 @@ struct SettingsView: View {
             Tab("General", systemImage: "gearshape", value: 0) { GeneralSettings() }
             Tab("Menu Bar", systemImage: "menubar.rectangle", value: 1) { MenuBarSettings() }
             Tab("Battery", systemImage: "battery.75percent", value: 2) { BatterySettings() }
-            Tab("About", systemImage: "info.circle", value: 3) { AboutSettings() }
+            Tab("Alerts", systemImage: "bell.badge", value: 3) { AlertSettings() }
+            Tab("About", systemImage: "info.circle", value: 4) { AboutSettings() }
         }
         .frame(width: 520, height: 460)
         .onAppear { SettingsTabDriver.select = { tab = $0 } }
@@ -177,6 +178,104 @@ private struct BatterySettings: View {
                 .font(.callout).foregroundStyle(.secondary)
         case .unavailable(let why):
             LabeledContent("Charge helper") { Text(why).foregroundStyle(.red) }
+        }
+    }
+}
+
+private struct AlertSettings: View {
+    @Environment(AppModel.self) private var model
+
+    private func binding<T>(_ id: UUID, _ keyPath: WritableKeyPath<AlertRule, T>, fallback: T) -> Binding<T> {
+        Binding(
+            get: { model.settings.stored.alerts.first { $0.id == id }?[keyPath: keyPath] ?? fallback },
+            set: { v in
+                guard let i = model.settings.stored.alerts.firstIndex(where: { $0.id == id }) else { return }
+                model.settings.stored.alerts[i][keyPath: keyPath] = v
+            })
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(model.settings.stored.alerts) { rule in
+                    HStack(spacing: 10) {
+                        Toggle(rule.metric.title, isOn: Binding(
+                            get: { rule.enabled },
+                            set: { on in
+                                if on { model.requestNotificationPermission() }
+                                binding(rule.id, \.enabled, fallback: false).wrappedValue = on
+                            }))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                        Text(rule.metric.title).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text("\(Int(rule.threshold))\(rule.metric.unit)")
+                            .monospacedDigit()
+                            .frame(width: 52, alignment: .trailing)
+                        Stepper(rule.metric.title, value: binding(rule.id, \.threshold, fallback: rule.threshold),
+                                in: range(rule.metric), step: step(rule.metric))
+                            .labelsHidden()
+                        Picker("For", selection: binding(rule.id, \.sustain, fallback: 0)) {
+                            ForEach(sustainOptions(including: rule.sustain), id: \.self) { s in
+                                Text(sustainLabel(s)).tag(s)
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(width: 90)
+                        Button("Remove", systemImage: "minus.circle") {
+                            model.settings.stored.alerts.removeAll { $0.id == rule.id }
+                        }
+                        .labelStyle(.iconOnly)
+                        .buttonStyle(.borderless)
+                    }
+                }
+            } footer: {
+                Text("Alerts notify once, then re-arm after the value has clearly recovered.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+            Menu("Add Alert") {
+                ForEach(AlertRule.Metric.allCases, id: \.self) { m in
+                    Button(m.title) {
+                        model.settings.stored.alerts.append(AlertRule(metric: m, threshold: defaultThreshold(m)))
+                        model.requestNotificationPermission()
+                    }
+                }
+            }
+            .accessibilityIdentifier("settings.addAlert")
+        }
+        .formStyle(.grouped)
+    }
+
+    private func sustainOptions(including current: Double) -> [Double] {
+        Array(Set([0, 10, 30, 60, 300, current])).sorted()
+    }
+
+    private func sustainLabel(_ s: Double) -> String {
+        switch s {
+        case 0: "at once"
+        case ..<60: "\(Int(s)) s"
+        default: "\(Int(s / 60)) min"
+        }
+    }
+
+    private func range(_ m: AlertRule.Metric) -> ClosedRange<Double> {
+        switch m {
+        case .temperatureAbove: 50...110
+        case .diskFreeBelowGB: 1...500
+        default: 1...100
+        }
+    }
+
+    private func step(_ m: AlertRule.Metric) -> Double { m == .temperatureAbove ? 1 : 5 }
+
+    private func defaultThreshold(_ m: AlertRule.Metric) -> Double {
+        switch m {
+        case .cpuAbove, .memoryAbove: 90
+        case .temperatureAbove: 95
+        case .batteryBelow: 20
+        case .batteryAtLeast: 80
+        case .diskFreeBelowGB: 20
         }
     }
 }

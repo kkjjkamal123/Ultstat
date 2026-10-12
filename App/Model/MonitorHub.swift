@@ -68,6 +68,7 @@ final class MonitorHub {
 
     // MARK: Demand
 
+    /// Items whose samplers must run: menu-bar items plus metrics that enabled alerts watch.
     func setMenuItems(_ items: Set<MenuBarItem>) {
         guard items != menuItems else { return }
         for removed in menuItems.subtracting(items) { menuTokens[removed] = nil }

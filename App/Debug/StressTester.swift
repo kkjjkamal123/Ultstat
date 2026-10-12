@@ -64,7 +64,7 @@ enum SettingsTabDriver {
     static var select: ((Int) -> Void)?
     static func cycle() {
         Task { @MainActor in
-            for i in [1, 2, 3, 0] {
+            for i in [1, 2, 3, 4, 0] {
                 select?(i)
                 try? await Task.sleep(for: .milliseconds(120))
             }

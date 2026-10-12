@@ -4,6 +4,7 @@ import ServiceManagement
 import SwiftUI
 import UltstatCore
 import UltstatKit
+import UserNotifications
 
 @MainActor @Observable
 final class AppModel {
@@ -31,9 +32,28 @@ final class AppModel {
         observeSettings()
     }
 
+    @ObservationIgnored private var alertEngine = AlertEngine()
+
     private func receive(_ r: Readings) {
         readings = r
         statusItem?.render()
+        let rules = settings.stored.alerts
+        guard rules.contains(where: \.enabled) else { return }
+        for firing in alertEngine.evaluate(rules, readings: r, now: Date()) { notify(firing) }
+    }
+
+    private func notify(_ f: AlertFiring) {
+        let content = UNMutableNotificationContent()
+        content.title = f.title
+        content.body = f.body
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: f.rule.id.uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
+    /// Asks for notification permission the first time an alert is enabled.
+    func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     // MARK: Settings → hub
@@ -53,7 +73,9 @@ final class AppModel {
 
     private func applySettings() {
         let s = settings.stored
-        hub.setMenuItems(Set(s.items))
+        // Alerts need their metric sampled even when it is not shown in the menu bar.
+        let alertItems = s.alerts.filter(\.enabled).compactMap(\.metric.requiredItem)
+        hub.setMenuItems(Set(s.items).union(alertItems))
         hub.setBluetoothAccessories(s.bluetoothAccessories)
         if appliedInterval != s.interval {
             hub.setInterval(s.interval)
