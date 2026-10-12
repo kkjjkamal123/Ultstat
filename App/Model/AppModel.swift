@@ -45,7 +45,7 @@ final class AppModel {
         }
         guard installed != ultstatHelperVersion else { return }
         do {
-            if helper.isLegacyInstalled {
+            if helper.isLegacyInstalled || HelperClient.teamID == nil {
                 try helper.installWithAdministratorPrompt()
             } else {
                 try await helper.reregister()
@@ -169,6 +169,21 @@ final class AppModel {
     /// Prefers SMAppService; falls back to the administrator prompt when the system refuses to
     /// register an unsigned daemon (common for builds from source without a signing identity).
     func installHelper() {
+        // Ad-hoc builds never use SMAppService: it would run the daemon from this user-writable
+        // bundle. They always install the root-owned, hash-verified copy instead.
+        if HelperClient.teamID == nil {
+            do {
+                try helper.installWithAdministratorPrompt()
+                helperError = nil
+            } catch HelperInstallError.cancelled {
+                helperError = nil
+            } catch {
+                helperError = error.localizedDescription
+            }
+            helperState = helper.state
+            Task { await refreshHelper() }
+            return
+        }
         do {
             try helper.install()
             helperError = nil
