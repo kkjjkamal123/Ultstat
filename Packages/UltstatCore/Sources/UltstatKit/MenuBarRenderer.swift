@@ -35,12 +35,15 @@ public struct Segment: Equatable, Sendable {
     }
 
     public var symbol: String?
+    /// Plain-text name drawn before the value ("CPU 8%"), instead of a symbol.
+    public var name: String?
     public var content: Content
     /// Widest string this segment can show; fixes its width so the item never resizes.
     public var slot: String = ""
 
-    public init(symbol: String?, content: Content, slot: String = "") {
+    public init(symbol: String?, name: String? = nil, content: Content, slot: String = "") {
         self.symbol = symbol
+        self.name = name
         self.content = content
         self.slot = slot
     }
@@ -82,7 +85,19 @@ public enum MenuBarRenderer {
     public static func segments(for items: [MenuBarItem], readings r: Readings, settings: AppSettings.Stored,
                                 histories: [MenuBarItem: [Float]] = [:]) -> [Segment] {
         items.compactMap { item -> Segment? in
-            let icon = settings.showIcons ? item.symbol : nil
+            guard var seg = segment(item, readings: r, settings: settings, histories: histories) else { return nil }
+            switch seg.content {
+            case .labeled, .battery: break   // already captioned / self-explanatory
+            default: if settings.itemLabel == .name { seg.name = item.shortName }
+            }
+            return seg
+        }
+    }
+
+    private static func segment(_ item: MenuBarItem, readings r: Readings, settings: AppSettings.Stored,
+                                histories: [MenuBarItem: [Float]]) -> Segment? {
+        do {
+            let icon = settings.itemLabel == .icon ? item.symbol : nil
             let style = settings.styles[item] ?? .text
             switch item {
             case .cpu:
@@ -201,14 +216,16 @@ public enum MenuBarRenderer {
 
     private static func contentWidth(_ seg: Segment) -> CGFloat {
         switch seg.content {
-        case .text(let t): max(textWidth(seg.slot, small: false), (t as NSString).size(withAttributes: textAttrs).width)
+        // Sized to the value itself, so the number sits right next to its icon (a fixed slot left a
+        // wide gap after short values like "8%").
+        case .text(let t): (t as NSString).size(withAttributes: textAttrs).width
         case .stacked(let a, let b):
             max(textWidth(seg.slot, small: true), (a as NSString).size(withAttributes: smallAttrs).width,
                 (b as NSString).size(withAttributes: smallAttrs).width)
         case .bar: 6
         case .sparkline: sparklineWidth
         case .labeled(let caption, let value):
-            max(textWidth(caption, attrs: captionAttrs), textWidth(seg.slot, attrs: valueAttrs), textWidth(value, attrs: valueAttrs))
+            max(textWidth(caption, attrs: captionAttrs), textWidth(value, attrs: valueAttrs))
         case .battery(_, _, let time, _):
             batteryBody.width + 2.5 + 5 + max(textWidth(seg.slot, attrs: textAttrs), textWidth(time, attrs: textAttrs))
         }
@@ -218,8 +235,11 @@ public enum MenuBarRenderer {
         ceil((s as NSString).size(withAttributes: attrs).width)
     }
 
+    private static let nameGap: CGFloat = 4
+
     private static func width(of seg: Segment) -> CGFloat {
         var w = ceil(contentWidth(seg))
+        if let n = seg.name { w += textWidth(n, attrs: textAttrs) + nameGap }
         if let s = seg.symbol, let img = symbolImage(s) { w += img.size.width + iconGap }
         return w
     }
@@ -231,12 +251,15 @@ public enum MenuBarRenderer {
             img.draw(in: NSRect(x: x, y: y, width: img.size.width, height: img.size.height))
             x += img.size.width + iconGap
         }
-        let slot = x0 + width - x
+        if let n = seg.name {
+            let size = (n as NSString).size(withAttributes: textAttrs)
+            (n as NSString).draw(at: NSPoint(x: x, y: (height - size.height) / 2), withAttributes: textAttrs)
+            x += ceil(size.width) + nameGap
+        }
         switch seg.content {
         case .text(let t):
             let size = (t as NSString).size(withAttributes: textAttrs)
-            // Right-align inside the fixed slot so digits stay put as values change.
-            (t as NSString).draw(at: NSPoint(x: x + slot - size.width, y: (height - size.height) / 2), withAttributes: textAttrs)
+            (t as NSString).draw(at: NSPoint(x: x, y: (height - size.height) / 2), withAttributes: textAttrs)
         case .stacked(let top, let bottom):
             (top as NSString).draw(at: NSPoint(x: x, y: height / 2 - 0.5), withAttributes: smallAttrs)
             (bottom as NSString).draw(at: NSPoint(x: x, y: 1), withAttributes: smallAttrs)
@@ -269,10 +292,12 @@ public enum MenuBarRenderer {
                                       scale: CGFloat, pluggedIn: Bool = false) -> (image: CGImage, size: CGSize)? {
         // Sized like the system battery icon.
         let bodySize = NSSize(width: 26.5, height: 13)
-        let gap: CGFloat = 4
+        // No estimate (on the adapter but not charging, or still measuring): show no time at all.
+        let time = ["--", "–", "—", "-"].contains(time.trimmingCharacters(in: .whitespaces)) ? "" : time
+        let gap: CGFloat = time.isEmpty ? 0 : 4
         let tAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(cgColor: textColor) ?? .labelColor]
         let tSize = (time as NSString).size(withAttributes: tAttrs)
-        let slot = max(ceil(tSize.width), ceil(("8:88" as NSString).size(withAttributes: tAttrs).width))
+        let slot = time.isEmpty ? 0 : max(ceil(tSize.width), ceil(("8:88" as NSString).size(withAttributes: tAttrs).width))
         let plugImage = pluggedIn && !charging
             ? NSImage(systemSymbolName: "powerplug.fill", accessibilityDescription: nil)?.withSymbolConfiguration(.init(pointSize: 9, weight: .semibold))
             : nil

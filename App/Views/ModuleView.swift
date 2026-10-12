@@ -452,7 +452,7 @@ private struct ChargeControlSection: View {
 
     var body: some View {
         let p = model.settings.stored.chargePolicy
-        let ready = model.helperState == .running && !model.helperNeedsUpdate
+        let ready = model.helperReady
         SectionHeader(title: "Charge limit")
         if !ready {
             HStack {
@@ -502,7 +502,9 @@ private struct ChargeControlSection: View {
                     .toggleStyle(.switch).controlSize(.small)
                 Spacer()
                 if let h = p.heatProtection {
-                    Stepper("\(Int(h))°C", value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
+                    let unit = model.settings.stored.temperatureUnit
+                    Stepper("\(unit.format(Float(h)))\(unit == .celsius ? "C" : "F")",
+                            value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
                         .font(.system(size: 12)).monospacedDigit()
                 }
             }

@@ -46,12 +46,20 @@ import UltstatCore
         return r
     }
 
-    @Test func widthIsStableAcrossValues() {
+    /// Values sit right after their name with no reserved slack ("CPU 8%" is narrower than "CPU 88%"),
+    /// and the default label is the plain name, not a symbol.
+    @Test func valuesAreTightAndNamed() {
         let s = AppSettings.Stored(items: [.cpu])
-        let widths = [0.0, 0.05, 0.42, 0.99].map { v -> CGFloat in
-            MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: Float(v)), settings: s), scale: 2).size.width
-        }
-        #expect(Set(widths).count == 1, "single- and double-digit values must not resize the item: \(widths)")
+        let segs = MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.08), settings: s)
+        #expect(segs.first?.name == "CPU")
+        #expect(segs.first?.symbol == nil)
+        let narrow = MenuBarRenderer.image(for: segs, scale: 2).size.width
+        let wide = MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.88), settings: s), scale: 2).size.width
+        #expect(narrow < wide)
+        var bare = s
+        bare.itemLabel = .none
+        let unnamed = MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.08), settings: bare), scale: 2).size.width
+        #expect(unnamed < narrow)
     }
 
     @Test func missingDataStillRenders() {

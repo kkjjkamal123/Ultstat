@@ -82,6 +82,7 @@ struct SettingsView: View {
 
 private struct GeneralSettings: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmReset = false
 
     var body: some View {
         @Bindable var settings = model.settings
@@ -92,8 +93,8 @@ private struct GeneralSettings: View {
                 Text(e).font(.callout).foregroundStyle(Theme.critical)
             }
             Picker("Refresh every", selection: $settings.stored.interval) {
-                ForEach([0.5, 0.6, 1.0, 2.0, 3.0, 5.0], id: \.self) { v in
-                    Text(v < 1 ? "\(Int(v * 1000)) ms" : "\(Int(v)) s").tag(v)
+                ForEach(Array(Set([0.5, 0.6, 1.0, 2.0, 3.0, 5.0, settings.stored.interval])).sorted(), id: \.self) { v in
+                    Text(v < 1 ? "\(Int((v * 1000).rounded())) ms" : (v == v.rounded() ? "\(Int(v)) s" : String(format: "%.1f s", v))).tag(v)
                 }
             }
             .accessibilityIdentifier("settings.interval")
@@ -101,6 +102,8 @@ private struct GeneralSettings: View {
                 Text("Celsius").tag(TemperatureUnit.celsius)
                 Text("Fahrenheit").tag(TemperatureUnit.fahrenheit)
             }
+            Toggle("Refresh every 2 s or slower in Low Power Mode", isOn: $settings.stored.slowInLowPowerMode)
+                .accessibilityIdentifier("settings.slowInLowPower")
             Toggle("Show AirPods and Bluetooth headphone batteries", isOn: $settings.stored.bluetoothAccessories)
                 .accessibilityIdentifier("settings.bluetooth")
             Section {
@@ -111,11 +114,17 @@ private struct GeneralSettings: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {
-                Button("Reset All Settings", role: .destructive) { model.settings.resetToDefaults() }
+                Button("Reset All Settings…", role: .destructive) { confirmReset = true }
                     .accessibilityIdentifier("settings.reset")
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog("Reset all settings?", isPresented: $confirmReset) {
+            Button("Reset", role: .destructive) { model.resetAllSettings() }
+                .accessibilityIdentifier("settings.reset.confirm")
+        } message: {
+            Text("Menu bar items, refresh rate, alerts and battery choices return to their defaults. Charge limiting is turned off.")
+        }
     }
 }
 
@@ -154,9 +163,30 @@ private struct MenuBarSettings: View {
                     }
                 }
             }
-            Toggle("Show icons (Text, Bar and Graph styles)", isOn: $settings.stored.showIcons)
-            Toggle("Combine into one menu bar item", isOn: $settings.stored.combineMenuBar)
-                .accessibilityIdentifier("settings.combine")
+            Section {
+                Picker("Before each value", selection: $settings.stored.itemLabel) {
+                    Text("Name (CPU 8%)").tag(ItemLabel.name)
+                    Text("Icon").tag(ItemLabel.icon)
+                    Text("Nothing").tag(ItemLabel.none)
+                }
+                .accessibilityIdentifier("settings.itemLabel")
+                LabeledContent("Spacing between items") {
+                    HStack {
+                        Slider(value: $settings.stored.itemSpacing, in: AppSettings.Stored.itemSpacingRange, step: 1)
+                            .frame(width: 180)
+                            .accessibilityIdentifier("settings.spacing")
+                        Text("\(Int(settings.stored.itemSpacing)) pt").monospacedDigit().frame(width: 40, alignment: .trailing)
+                    }
+                }
+                .disabled(settings.stored.separateItems)
+                Toggle("Use a separate menu bar item for each metric", isOn: $settings.stored.separateItems)
+                    .accessibilityIdentifier("settings.separate")
+            } footer: {
+                Text(settings.stored.separateItems
+                     ? "Separate items can be rearranged individually, but macOS puts a wide fixed gap between them."
+                     : "All metrics share one menu bar item, so the spacing is yours to set. Click a metric to open its panel.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }
@@ -173,13 +203,13 @@ private struct BatterySettings: View {
 
     var body: some View {
         let policy = model.settings.stored.chargePolicy
+        let unit = model.settings.stored.temperatureUnit
         Form {
             Section {
                 helperRow
             }
-            Section("Charge limit") {
+            Section {
                 Toggle("Limit charging", isOn: Binding(get: { model.settings.stored.chargeControlEnabled }, set: { model.setChargeControl($0) }))
-                    .disabled(model.helperState != .running)
                     .accessibilityIdentifier("settings.chargeControl")
                 LabeledContent("Stop charging at") {
                     HStack {
@@ -191,37 +221,52 @@ private struct BatterySettings: View {
                     }
                 }
                 Stepper("Sailing range: \(policy.sailingRange)%", value: self.policy(\.sailingRange), in: 0...20)
+                    .accessibilityIdentifier("settings.sailing")
                 Toggle("Discharge to the limit when above it", isOn: self.policy(\.dischargeAboveLimit))
+                    .accessibilityIdentifier("settings.discharge")
                 Toggle("Heat protection", isOn: Binding(get: { policy.heatProtection != nil },
                                                         set: { v in model.updatePolicy { $0.heatProtection = v ? 40 : nil } }))
+                    .accessibilityIdentifier("settings.heat")
                 if let h = policy.heatProtection {
-                    Stepper("Pause charging above \(Int(h))°C",
+                    Stepper("Pause charging above \(unit.format(Float(h)))\(unit == .celsius ? "C" : "F")",
                             value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
                 }
                 Toggle("Use gauge charge instead of macOS percentage", isOn: self.policy(\.useHardwarePercent))
                 HStack {
-                    Button("Top Up to 100% Once") { model.updatePolicy { $0.topUp = true } }
-                        .disabled(!model.settings.stored.chargeControlEnabled || policy.topUp)
+                    Button(policy.topUp ? "Cancel Top Up" : "Top Up to 100% Once") { model.updatePolicy { $0.topUp.toggle() } }
+                        .accessibilityIdentifier("settings.topUp")
                     Spacer()
-                    if policy.calibration == nil {
-                        Button("Calibrate Battery…") { model.updatePolicy { $0.calibration = .discharging } }
-                            .disabled(!model.settings.stored.chargeControlEnabled)
-                            .help("Discharges to 15%, charges to 100%, holds for an hour, then returns to your limit. Takes several hours.")
-                    } else {
-                        Button("Stop Calibration") { model.updatePolicy { $0.calibration = nil } }
+                    Button(policy.calibration == nil ? "Calibrate Battery…" : "Stop Calibration") {
+                        model.updatePolicy { $0.calibration = $0.calibration == nil ? .discharging : nil }
                     }
+                    .accessibilityIdentifier("settings.calibrate")
+                    .help("Discharges to 15%, charges to 100%, holds for an hour, then returns to your limit. Takes several hours.")
+                }
+            } header: {
+                Text("Charge limit")
+            } footer: {
+                if !model.helperReady {
+                    Text("Your choices are saved and take effect once the helper is installed.")
+                        .font(.callout).foregroundStyle(.secondary)
                 }
             }
-            .disabled(model.helperState != .running)
-            Section("MagSafe LED") {
+            Section {
                 Picker("LED", selection: self.policy(\.magSafeLED)) {
                     Text("System").tag(0)
                     Text("Off").tag(1)
                     Text("Green").tag(3)
                     Text("Amber").tag(4)
                 }
+                .accessibilityIdentifier("settings.magsafe")
+                .disabled(!model.settings.stored.chargeControlEnabled)
+            } header: {
+                Text("MagSafe LED")
+            } footer: {
+                Text(model.settings.stored.chargeControlEnabled
+                     ? "Turning Limit charging off returns the LED to the system's behaviour."
+                     : "Available while Limit charging is on. Normal charging uses the system's LED behaviour.")
+                    .font(.callout).foregroundStyle(.secondary)
             }
-            .disabled(model.helperState != .running)
             if let e = model.helperError {
                 Text(e).font(.callout).foregroundStyle(.red)
             }
@@ -399,11 +444,16 @@ private struct MenuBarPreview: View {
 
     var body: some View {
         let s = model.settings.stored
-        let segs = MenuBarRenderer.segments(for: s.items, readings: model.readings, settings: s, histories: model.menuBarHistories())
+        let metrics: [MenuBarItem?] = s.items.isEmpty ? [nil] : s.items.map(Optional.some)
         let tint = (scheme == .dark ? NSColor.white : NSColor.black).cgColor
+        let parts = metrics.compactMap { m in
+            StatusItemController.image(metric: m, segments: StatusItemController.segments(metric: m, model: model), tint: tint, scale: 2)
+        }
+        // Separate items: macOS's own gap (about 16 pt on this bar). Single item: the chosen spacing.
+        let spacing: CGFloat = s.separateItems ? 16 : CGFloat(s.itemSpacing)
         HStack {
             Spacer()
-            if let (img, size) = MenuBarRenderer.cgImage(for: segs, scale: 2, tint: tint) {
+            if let (img, size, _) = StatusItemController.compose(parts, spacing: spacing, scale: 2) {
                 Image(decorative: img, scale: 2).frame(width: size.width, height: size.height)
             }
             Spacer()

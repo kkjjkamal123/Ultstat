@@ -43,10 +43,15 @@ final class AppModel {
     init() {
         let bus = ReadingsBus { [weak self] r in self?.receive(r) }
         self.bus = bus
-        hub = MonitorHub(bus: bus, interval: settings.stored.interval, bluetoothAccessories: settings.stored.bluetoothAccessories)
+        hub = MonitorHub(bus: bus, interval: settings.effectiveInterval(lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled),
+                         bluetoothAccessories: settings.stored.bluetoothAccessories)
         applySettings()
         helperState = helper.state
         observeSettings()
+        // "Slow down in Low Power Mode" follows the system switch.
+        NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applySettings() }
+        }
         Task { await upgradeHelperIfNeeded() }
     }
 
@@ -55,6 +60,9 @@ final class AppModel {
     /// automatically: the UI offers an "Update Helper" button instead.
     private(set) var helperNeedsUpdate = false
     private(set) var installing = false
+
+    /// The helper is installed, answering, and matches this build: charge commands will take effect.
+    var helperReady: Bool { helperState == .running && !helperNeedsUpdate }
 
     private func upgradeHelperIfNeeded() async {
         guard helper.state == .running else { return }
@@ -112,9 +120,10 @@ final class AppModel {
         let alertItems = s.alerts.filter(\.enabled).compactMap(\.metric.requiredItem)
         hub.setMenuItems(Set(s.items).union(alertItems))
         hub.setBluetoothAccessories(s.bluetoothAccessories)
-        if appliedInterval != s.interval {
-            hub.setInterval(s.interval)
-            appliedInterval = s.interval
+        let interval = settings.effectiveInterval(lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled)
+        if appliedInterval != interval {
+            hub.setInterval(interval)
+            appliedInterval = interval
         }
         reconcileStatusItems()
         for item in statusItems { item.render() }
@@ -169,13 +178,21 @@ final class AppModel {
     }
 
     /// Creates or removes status items to match settings. Items are created right-to-left, because
-    /// macOS places each new item to the left of the existing ones.
+    /// macOS places each new item to the left of the existing ones. In single-item mode the one item
+    /// is updated in place, so it keeps the position the user dragged it to.
     func reconcileStatusItems() {
         let s = settings.stored
-        let wanted: [MenuBarItem?] = s.combineMenuBar ? [nil] : (s.items.isEmpty ? [nil] : s.items.map { Optional($0) })
-        guard wanted != statusItems.map(\.metric) else { return }
+        let wanted: [[MenuBarItem]] = s.items.isEmpty ? [[]] : (s.separateItems ? s.items.map { [$0] } : [s.items])
+        guard wanted != statusItems.map(\.metrics) else { return }
+        let single = !s.separateItems || s.items.isEmpty
+        if single, statusItems.count == 1, statusItems[0].isSingleItem {
+            statusItems[0].setMetrics(wanted[0])
+            return
+        }
         for item in statusItems { item.remove() }
-        statusItems = wanted.reversed().map { StatusItemController(model: self, metric: $0) }.reversed()
+        statusItems = wanted.reversed().map { m in
+            StatusItemController(model: self, metrics: m, autosaveName: single ? "main" : (m.first?.rawValue ?? "main"))
+        }.reversed()
     }
 
     func closeAllPanels() {
@@ -226,7 +243,10 @@ final class AppModel {
             try helper.install()
             helperError = nil
             helperState = helper.state
-            Task { await refreshHelper() }
+            Task {
+                await refreshHelper()
+                if settings.stored.chargeControlEnabled { pushPolicy() }
+            }
         } catch {
             // SMAppService refused (e.g. signing); fall back to the root-owned copy.
             Task { await installViaAdministratorPrompt() }
@@ -266,7 +286,9 @@ final class AppModel {
 
     func updatePolicy(_ change: (inout ChargePolicy) -> Void) {
         var p = settings.stored.chargePolicy
-        if let remote = chargeStatus?.policy {   // keep the helper's progress unless the change overrides it
+        // Keep the helper's progress unless the change overrides it. Only while it is enforcing this
+        // policy: otherwise its copy is stale and would undo the click (e.g. Top Up never deselecting).
+        if helperReady, settings.stored.chargeControlEnabled, let remote = chargeStatus?.policy {
             p.calibration = remote.calibration
             p.topUp = remote.topUp
         }
@@ -276,7 +298,7 @@ final class AppModel {
     }
 
     func pushPolicy() {
-        guard settings.stored.chargeControlEnabled else { return }
+        guard settings.stored.chargeControlEnabled, helperReady else { return }
         let policy = settings.stored.chargePolicy
         Task {
             helperError = await helper.apply(policy)
@@ -286,6 +308,8 @@ final class AppModel {
 
     func setChargeControl(_ on: Bool) {
         settings.stored.chargeControlEnabled = on
+        // Without a working helper the choice is saved and applied once it is installed or updated.
+        guard helperReady else { return }
         Task {
             if on {
                 helperError = await helper.apply(settings.stored.chargePolicy)
@@ -294,6 +318,13 @@ final class AppModel {
             }
             await refreshHelper()
         }
+    }
+
+    /// Resets every preference. Charge limiting is switched off properly first, so the helper
+    /// returns to normal charging instead of enforcing a limit the settings no longer show.
+    func resetAllSettings() {
+        if settings.stored.chargeControlEnabled { setChargeControl(false) }
+        settings.resetToDefaults()
     }
 
     // MARK: History for charts (read on demand by open views only)

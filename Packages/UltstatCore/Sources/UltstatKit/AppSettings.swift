@@ -20,6 +20,20 @@ public enum MenuBarItem: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
+    /// Plain name shown before the value in the menu bar ("CPU 8%").
+    public var shortName: String {
+        switch self {
+        case .cpu: "CPU"
+        case .gpu: "GPU"
+        case .memory: "RAM"
+        case .network: "NET"
+        case .disk: "DISK"
+        case .temperature: "TEMP"
+        case .power: "POWER"
+        case .battery: "BAT"
+        }
+    }
+
     public var symbol: String {
         switch self {
         case .cpu: "cpu"
@@ -38,6 +52,11 @@ public enum WidgetStyle: String, Codable, CaseIterable, Sendable {
     /// Caption above the value ("CPU" over "7%"), the compact default.
     case labeled
     case text, bar, sparkline
+}
+
+/// What precedes each value in the menu bar.
+public enum ItemLabel: String, Codable, CaseIterable, Sendable {
+    case name, icon, none
 }
 
 public enum TemperatureUnit: String, Codable, CaseIterable, Sendable {
@@ -62,17 +81,22 @@ public final class AppSettings {
         }
 
         public var items: [MenuBarItem] = [.cpu, .gpu, .memory, .temperature, .power, .battery]
-        public var styles: [MenuBarItem: WidgetStyle] = [.cpu: .labeled, .gpu: .labeled, .memory: .labeled, .temperature: .labeled, .power: .labeled]
+        public var styles: [MenuBarItem: WidgetStyle] = [:]   // every item defaults to plain text ("CPU 8%")
         /// Refresh interval in seconds (fractional: 0.6 = 600 ms).
         public var interval: Double = 0.6
         public var temperatureUnit: TemperatureUnit = .celsius
-        public var showIcons: Bool = true
+        public var itemLabel: ItemLabel = .name
         public var chargePolicy = ChargePolicy(limit: 80, sailingRange: 5)
         public var chargeControlEnabled = false
-        public var lowPowerSampling = true
+        /// Refresh no faster than every 2 s while macOS Low Power Mode is on.
+        public var slowInLowPowerMode = false
         public var bluetoothAccessories = false
-        /// One status item for everything (opens the full dashboard) instead of one per metric.
-        public var combineMenuBar = false
+        /// One macOS status item per metric. Off (default): every metric is drawn in a single item with
+        /// `itemSpacing` between them, because macOS puts a wide fixed gap between separate items.
+        public var separateItems = false
+        /// Gap between metrics in the single item, in points.
+        public var itemSpacing: Double = 10
+        public static let itemSpacingRange = 0.0...20.0
         public var alerts: [AlertRule] = [
             // Fixed IDs: defaults must be identical every time they are created.
             AlertRule(id: UUID(uuidString: "6D7C3A10-0001-4C6E-9B1D-000000000001")!,
@@ -84,8 +108,8 @@ public final class AppSettings {
         ]
 
         private enum CodingKeys: String, CodingKey {
-            case items, styles, interval, temperatureUnit, showIcons, chargePolicy, chargeControlEnabled,
-                 lowPowerSampling, bluetoothAccessories, alerts, combineMenuBar
+            case items, styles, interval, temperatureUnit, itemLabel, chargePolicy, chargeControlEnabled,
+                 slowInLowPowerMode, bluetoothAccessories, alerts, separateItems, itemSpacing
         }
 
         /// Every field falls back to its default, so adding a setting never discards a user's saved ones
@@ -98,13 +122,15 @@ public final class AppSettings {
             // Older versions stored whole seconds as Int; Double decoding accepts both.
             interval = (try? c.decodeIfPresent(Double.self, forKey: .interval)).flatMap { $0 }.map { min(max($0, 0.5), 10) } ?? d.interval
             temperatureUnit = (try? c.decodeIfPresent(TemperatureUnit.self, forKey: .temperatureUnit)) ?? d.temperatureUnit
-            showIcons = (try? c.decodeIfPresent(Bool.self, forKey: .showIcons)) ?? d.showIcons
+            itemLabel = (try? c.decodeIfPresent(ItemLabel.self, forKey: .itemLabel)) ?? d.itemLabel
             chargePolicy = (try? c.decodeIfPresent(ChargePolicy.self, forKey: .chargePolicy)) ?? d.chargePolicy
             chargeControlEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .chargeControlEnabled)) ?? d.chargeControlEnabled
-            lowPowerSampling = (try? c.decodeIfPresent(Bool.self, forKey: .lowPowerSampling)) ?? d.lowPowerSampling
+            slowInLowPowerMode = (try? c.decodeIfPresent(Bool.self, forKey: .slowInLowPowerMode)) ?? d.slowInLowPowerMode
             bluetoothAccessories = (try? c.decodeIfPresent(Bool.self, forKey: .bluetoothAccessories)) ?? d.bluetoothAccessories
             alerts = (try? c.decodeIfPresent([AlertRule].self, forKey: .alerts)) ?? d.alerts
-            combineMenuBar = (try? c.decodeIfPresent(Bool.self, forKey: .combineMenuBar)) ?? d.combineMenuBar
+            separateItems = (try? c.decodeIfPresent(Bool.self, forKey: .separateItems)) ?? d.separateItems
+            itemSpacing = (try? c.decodeIfPresent(Double.self, forKey: .itemSpacing))
+                .flatMap { $0 }.map { min(max($0, Self.itemSpacingRange.lowerBound), Self.itemSpacingRange.upperBound) } ?? d.itemSpacing
         }
     }
 
@@ -158,6 +184,11 @@ public final class AppSettings {
     }
 
     public func resetToDefaults() { stored = Stored() }
+
+    /// The sampling interval to use now: the chosen one, or at least 2 s in Low Power Mode when asked.
+    public func effectiveInterval(lowPowerMode: Bool) -> Double {
+        stored.slowInLowPowerMode && lowPowerMode ? max(stored.interval, 2) : stored.interval
+    }
 
     private func save() {
         guard overrideItems == nil else { return }
