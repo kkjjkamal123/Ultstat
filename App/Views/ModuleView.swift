@@ -649,10 +649,26 @@ private struct ChargeControlSection: View {
                     if p.calibration == nil { confirmCalibration = true } else { model.toggleCalibration() }
                 }
             }
-            .confirmationDialog("Start battery calibration?", isPresented: $confirmCalibration) {
-                Button("Start Calibration") { model.toggleCalibration() }
-            } message: {
-                Text(Help.calibrate)
+            if confirmCalibration {
+                // Inline, not a dialog: sheets don't attach reliably to this borderless panel.
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Start calibration? It runs for many hours: discharges to 15 %, charges to 100 %, holds an hour, "
+                         + "then returns to your limit. Keep the Mac plugged in.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button("Start Calibration") {
+                            confirmCalibration = false
+                            model.toggleCalibration()
+                        }
+                        .buttonStyle(.glassProminent)
+                        Button("Cancel") { confirmCalibration = false }
+                            .buttonStyle(.glass)
+                    }
+                    .controlSize(.small)
+                }
+                .padding(10)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
             if let progress = model.calibrationProgress(percent: model.panelReadings.battery?.percent) {
                 Text(progress).font(.system(size: 11)).foregroundStyle(.secondary)

@@ -253,6 +253,7 @@ private struct MenuBarSettings: View {
 
 private struct BatterySettings: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmCalibration = false
 
     /// Two-way binding to one field of the charge policy; writes go through `updatePolicy`.
     private func policy<T>(_ keyPath: WritableKeyPath<ChargePolicy, T>) -> Binding<T> {
@@ -298,7 +299,12 @@ private struct BatterySettings: View {
                         .accessibilityIdentifier("settings.topUp")
                     Spacer()
                     Button(policy.calibration == nil ? "Calibrate Battery…" : "Stop Calibration") {
-                        model.updatePolicy { $0.calibration = $0.calibration == nil ? .discharging : nil }
+                        if policy.calibration == nil { confirmCalibration = true } else { model.toggleCalibration() }
+                    }
+                    .confirmationDialog("Start battery calibration?", isPresented: $confirmCalibration) {
+                        Button("Start Calibration") { model.toggleCalibration() }
+                    } message: {
+                        Text(Help.calibrate)
                     }
                     .accessibilityIdentifier("settings.calibrate")
                     .help("Discharges to 15%, charges to 100%, holds for an hour, then returns to your limit. Takes several hours.")
