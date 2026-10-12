@@ -35,11 +35,11 @@ enum SnapshotExporter {
         for (name, appearance) in [("menubar-dark", NSAppearance.Name.darkAqua), ("menubar-light", .aqua)] {
             writeMenuBar(segments: segs, appearance: appearance, to: dir.appendingPathComponent("\(name).png"))
         }
+        model.popoverOpened()   // panels read panel readings, which only flow while a panel is open
         for (name, appearance) in [("dashboard-dark", NSAppearance.Name.darkAqua), ("dashboard-light", .aqua)] {
             writeView(DashboardView().environment(model), size: DashboardPanel.size, appearance: appearance,
                       to: dir.appendingPathComponent("\(name).png"))
         }
-        model.popoverOpened()   // module views read panel readings, which only flow while a panel is open
         defer { model.popoverClosed() }
         for item in [MenuBarItem.memory, .cpu, .gpu, .disk, .battery, .power, .network, .temperature] {
             writeView(ModuleView(item: item).environment(model), size: NSSize(width: ModulePanelSize.width, height: 900), appearance: .darkAqua,

@@ -44,7 +44,7 @@ struct ModuleView: View {
     }
 
     private func body(_ r: Readings) -> some View {
-        VStack(spacing: 8) { content(r) }.frame(maxWidth: .infinity).padding(.bottom, 2)
+        VStack(spacing: 8) { ModuleContent(item: item, r: r) }.frame(maxWidth: .infinity).padding(.bottom, 2)
     }
 
     private var header: some View {
@@ -73,7 +73,14 @@ struct ModuleView: View {
         }
     }
 
-    @ViewBuilder private func content(_ r: Readings) -> some View {
+}
+
+/// The cards for one metric; shared by its menu-bar panel and the All metrics dashboard tabs.
+struct ModuleContent: View {
+    var item: MenuBarItem
+    var r: Readings
+
+    var body: some View {
         switch item {
         case .cpu: CPUModule(r: r)
         case .gpu: GPUModule(r: r)
@@ -235,7 +242,7 @@ private struct MemoryModule: View {
             }
             Card {
                 CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: MenuBarItem.memory.tint, trailing: MetricFormat.percent(m.usedFraction))
-                SmoothChart(series: [(model.memoryHistory, Theme.violet)], maxValue: 1)
+                SmoothChart(series: [(model.memoryHistory, Theme.magenta)], maxValue: 1)
             }
             Card(spacing: 6) {
                 CardTitle(symbol: "memorychip", title: "Breakdown", tint: .secondary, trailing: "\(ByteFormat.size(m.used)) of \(ByteFormat.size(m.total))")
@@ -658,7 +665,7 @@ private struct ChargeControlSection: View {
             .background(active ? AnyShapeStyle(Color.green.gradient) : AnyShapeStyle(Color.primary.opacity(0.07)),
                         in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .animation(.smooth(duration: 0.25), value: active)
+            .animation(Motion.animation, value: active)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(active ? .isSelected : [])
@@ -680,13 +687,14 @@ struct CoreBars: View {
                     let tint = perf ? Theme.series1 : Theme.series2
                     ZStack(alignment: .bottom) {
                         Capsule().fill(Color.primary.opacity(0.07))
+                        // Scaled, not resized, so an animation never relayouts the panel.
                         Capsule().fill(LinearGradient(colors: [tint.opacity(0.7), tint], startPoint: .bottom, endPoint: .top))
-                            .frame(height: max(4, 44 * CGFloat(min(max(v, 0), 1))))
+                            .scaleEffect(x: 1, y: max(0.08, CGFloat(min(max(v, 0), 1))), anchor: .bottom)
                     }
                     .frame(height: 44)
                 }
             }
-            .animation(.smooth(duration: 0.4), value: load.perCore)
+            .animation(Motion.animation, value: load.perCore.map { Motion.bucket(Double($0)) })
             Legend(items: [(CPUTopology.performanceName, Theme.series1), (CPUTopology.efficiencyName, Theme.series2)])
         }
     }
@@ -720,7 +728,6 @@ struct BatteryGlyph: View {
                     .frame(width: capW, height: geo.size.height * 0.36)
             }
         }
-        .animation(.smooth(duration: 0.4), value: percent)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Battery \(percent) percent\(charging ? ", charging" : "")")
     }

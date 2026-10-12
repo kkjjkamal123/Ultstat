@@ -7,7 +7,7 @@ import SwiftUI
 /// positioned under the item when it's visible and always clamped to the screen's visible frame.
 @MainActor
 final class DashboardPanel: NSPanel {
-    static let size = NSSize(width: 384, height: 560)
+    static let size = NSSize(width: 400, height: 640)
 
     private var outsideClickMonitor: Any?
     private var keyMonitor: Any?

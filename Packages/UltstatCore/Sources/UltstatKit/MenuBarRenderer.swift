@@ -141,7 +141,8 @@ public enum MenuBarRenderer {
             case .battery:
                 guard let b = r.battery else { return nil }
                 return Segment(symbol: nil, content: .battery(percent: b.percent, charging: b.isCharging,
-                                                              time: BatteryTime.compact(b, systemWatts: r.systemPower),
+                                                              // On the adapter and not charging: no battery-life time (user preference).
+                                                              time: b.externalConnected && !b.isCharging && b.amperage >= -10 ? "" : BatteryTime.compact(b),
                                                               pluggedIn: b.externalConnected),
                                slot: "8:88")
             }

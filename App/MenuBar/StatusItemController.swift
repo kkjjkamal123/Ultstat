@@ -193,6 +193,10 @@ final class StatusItemController: NSObject {
         let event = NSApp.currentEvent
         if event?.type == .rightMouseUp {
             showMenu()
+        } else if isSingleItem, metrics.count > 1 {
+            // One item for everything: open All metrics, on the tab of the metric that was clicked.
+            if let m = metric(at: event) { UserDefaults.standard.set(DashboardTab(m).rawValue, forKey: DashboardView.tabKey) }
+            togglePopover(showAll: true)
         } else {
             togglePopover(metric(at: event))
         }
@@ -225,9 +229,10 @@ final class StatusItemController: NSObject {
         return NSRect(x: minX, y: whole.minY, width: r.upperBound - r.lowerBound, height: whole.height)
     }
 
-    /// Opens the panel for `requested` (default: the first metric), or closes it if it is open.
-    func togglePopover(_ requested: MenuBarItem? = nil) {
-        let target = requested ?? metrics.first
+    /// Opens the panel for `requested` (default: the first metric, or All metrics when `showAll`),
+    /// or closes it if it is open.
+    func togglePopover(_ requested: MenuBarItem? = nil, showAll: Bool = false) {
+        let target = showAll ? nil : requested ?? metrics.first
         let key = target?.rawValue ?? "all"
         if let open = panels.first(where: { $0.value.isVisible }) {
             open.value.dismiss()

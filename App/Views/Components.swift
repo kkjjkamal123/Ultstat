@@ -14,6 +14,7 @@ enum Theme {
     static let aqua = adaptive(light: 0x1BAF7A, dark: 0x199E70)     // slot 3
     static let yellow = adaptive(light: 0xEDA100, dark: 0xC98500)   // slot 4 (single-series only)
     static let violet = adaptive(light: 0x6250D6, dark: 0x9085E9)   // slot 7 (single-series only)
+    static let magenta = adaptive(light: 0xE87BA4, dark: 0xD55181)  // slot 5 (single-series only)
     static let series1 = blue
     static let series2 = orange
     static let series3 = aqua
@@ -61,25 +62,6 @@ struct Sparkline: View {
     }
 }
 
-/// Horizontal capsule meter.
-struct Meter: View {
-    var value: Float
-    var tint: Color = Theme.series1
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(.quaternary)
-                Capsule().fill(tint)
-                    .frame(width: max(3, geo.size.width * CGFloat(min(max(value, 0), 1))))
-            }
-        }
-        .frame(height: 5)
-        .animation(.smooth(duration: 0.35), value: value)
-        .accessibilityValue(Text("\(Int(value * 100)) percent"))
-    }
-}
-
 /// Stacked segments (e.g. memory app / wired / compressed).
 struct StackedMeter: View {
     var parts: [(Float, Color)]
@@ -100,45 +82,6 @@ struct StackedMeter: View {
     }
 }
 
-/// A card with an icon, title, headline value and arbitrary content.
-struct MetricCard<Content: View>: View {
-    var title: String
-    var symbol: String
-    var value: String
-    /// Identity mark shown beside the title. Text never takes the series colour.
-    var tint: Color?
-    var status: Color?
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Label(title, systemImage: symbol)
-                    .labelStyle(.titleAndIcon)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .symbolRenderingMode(.hierarchical)
-                Spacer()
-                if let status {
-                    Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 10)).foregroundStyle(status)
-                }
-                // No `.contentTransition(.numericText())`: it rasterises digits at many intermediate
-                // scales, and CoreGraphics caches every glyph bitmap. Measured: +0.75 MB retained per
-                // popover open (60 opens: 91 MB vs 42 MB without). Monospaced digits update in place.
-                Text(value)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-
-                    .foregroundStyle(.primary)
-            }
-            content
-        }
-        .padding(11)
-        .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-}
-
 /// Legend for charts with two or more series: colour dot + label, never colour alone.
 struct Legend: View {
     var items: [(String, Color)]
@@ -155,20 +98,5 @@ struct Legend: View {
             Spacer(minLength: 0)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-/// Small "label ........ value" row.
-struct StatRow: View {
-    var label: String
-    var value: String
-
-    var body: some View {
-        HStack {
-            Text(label).foregroundStyle(.secondary)
-            Spacer(minLength: 8)
-            Text(value).monospacedDigit()
-        }
-        .font(.system(size: 11))
     }
 }

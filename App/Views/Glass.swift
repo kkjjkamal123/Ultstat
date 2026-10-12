@@ -8,6 +8,24 @@ import UltstatKit
 // Cost rules (measured earlier): no blanket animations, no numericText transitions (their glyph
 // rasters were never freed), one Canvas per chart. Animations are scoped to the value they animate.
 
+// MARK: - Motion
+
+/// Animation policy. Readings arrive every 0.6 s; an animation on every one of them keeps the
+/// window redrawing at the display's full rate (120 Hz on ProMotion), measured at 160-240 ms/s of
+/// CPU with a panel open. So: short animations, only for changes big enough to see (values are
+/// bucketed before they key an animation), only render-side transforms (trim, scale) that don't
+/// relayout, and none at all in Low Power Mode or with Reduce Motion.
+enum Motion {
+    static var enabled: Bool {
+        !ProcessInfo.processInfo.isLowPowerModeEnabled && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+    }
+
+    static var animation: Animation? { enabled ? .smooth(duration: 0.3) : nil }
+
+    /// Animation key that only changes when `value` (0...1) moves by about 2 %.
+    static func bucket(_ value: Double) -> Int { Int((value * 50).rounded()) }
+}
+
 // MARK: - Surfaces
 
 /// A softly lifted rounded surface on the glass.
@@ -184,7 +202,7 @@ struct AnimatedRing: View {
             }
         }
         .padding(lineWidth / 2)
-        .animation(.smooth(duration: 0.45), value: segments.map(\.end))
+        .animation(Motion.animation, value: segments.map { Motion.bucket(Double($0.end)) })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(caption ?? "") \(center)")
     }
@@ -230,7 +248,7 @@ struct ArcGauge: View {
             }
         }
         .padding(lineWidth / 2)
-        .animation(.smooth(duration: 0.45), value: v)
+        .animation(Motion.animation, value: Motion.bucket(Double(v)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(caption) \(label)")
     }
@@ -243,15 +261,15 @@ struct GlassMeter: View {
     var height: CGFloat = 7
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.09))
-                Capsule().fill(LinearGradient(colors: [tint.opacity(0.75), tint], startPoint: .leading, endPoint: .trailing))
-                    .frame(width: max(height, geo.size.width * CGFloat(min(max(value, 0), 1))))
-            }
+        let v = CGFloat(min(max(value, 0), 1))
+        ZStack(alignment: .leading) {
+            Capsule().fill(Color.primary.opacity(0.09))
+            // Scaled rather than resized: animating a frame relayouts the panel every frame.
+            Capsule().fill(LinearGradient(colors: [tint.opacity(0.75), tint], startPoint: .leading, endPoint: .trailing))
+                .scaleEffect(x: max(v, 0.02), y: 1, anchor: .leading)
+                .animation(Motion.animation, value: Motion.bucket(Double(v)))
         }
         .frame(height: height)
-        .animation(.smooth(duration: 0.4), value: value)
     }
 }
 
@@ -307,7 +325,7 @@ struct PowerFlowStrip: View {
         Image(systemName: reversed ? "chevron.left.2" : "chevron.right.2")
             .font(.system(size: 10, weight: .bold))
             .foregroundStyle(active ? AnyShapeStyle(Theme.series1) : AnyShapeStyle(.quaternary))
-            .symbolEffect(.variableColor.iterative, options: .repeat(.continuous), isActive: active)
+            // Static: a repeating symbol effect redraws the panel continuously while it is open.
             .frame(width: 16)
     }
 }

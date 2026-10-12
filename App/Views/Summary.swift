@@ -22,7 +22,7 @@ struct SummaryGrid: View {
                      history: model.memoryHistory, tab: .memory)
             }
             GridRow {
-                tile("Power", r.systemPower.map { String(format: "%.1f W", $0) }, sub: "whole Mac", history: nil, tab: .battery)
+                tile("Power", r.systemPower.map { String(format: "%.1f W", $0) }, sub: "whole Mac", history: model.powerHistory, historyMax: nil, tab: .power)
                 tile("Battery", r.battery.map { "\($0.percent)%" }, sub: r.battery.map(BatteryTime.short), history: nil, tab: .battery,
                      status: batteryStatus(r.battery))
                 tile("Temp", hottest.map { unit.format($0) }, sub: "CPU", history: model.temperatureHistory(.cpuPerformance),
@@ -38,8 +38,8 @@ struct SummaryGrid: View {
         return b.percent <= 10 ? Theme.critical : b.percent <= 20 ? Theme.warning : nil
     }
 
-    private func tile(_ title: String, _ value: String?, sub: String?, history: [Float]?, historyMax: Float = 1,
-                      tab: DashboardTab, status: Color? = nil) -> some View {
+    private func tile(_ title: String, _ value: String?, sub: String?, history: [Float]?, historyMax: Float? = 1,
+                      tab: DashboardTab, tint: Color = Theme.blue, status: Color? = nil) -> some View {
         Button { select(tab) } label: {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
@@ -53,20 +53,21 @@ struct SummaryGrid: View {
                     .minimumScaleFactor(0.7)
                 Text(sub ?? " ").font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                 if let history, history.count > 1 {
-                    Sparkline(values: Array(history.suffix(40)), maxValue: historyMax).frame(height: 14)
+                    Sparkline(values: Array(history.suffix(40)), maxValue: historyMax, tint: tint).frame(height: 14)
                 } else {
                     Color.clear.frame(height: 14)
                 }
             }
-            .padding(8)
+            .padding(9)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(Color.primary.opacity(selected == tab ? 0.1 : 0.055), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 // The tile for the open tab is outlined, so the selection is visible.
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(Theme.series1.opacity(selected == tab ? 0.9 : 0), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(selected == tab ? AnyShapeStyle(Theme.series1) : AnyShapeStyle(Color.primary.opacity(0.08)),
+                                  lineWidth: selected == tab ? 1.5 : 0.5)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
         .buttonStyle(.plain)
         .focusEffectDisabled()
@@ -87,8 +88,8 @@ struct TabStrip: View {
                         .font(.system(size: 13, weight: selection == t ? .semibold : .regular))
                         .frame(maxWidth: .infinity, minHeight: 26)
                         .foregroundStyle(selection == t ? AnyShapeStyle(Theme.series1) : AnyShapeStyle(.secondary))
-                        .background(selection == t ? AnyShapeStyle(.fill.tertiary) : AnyShapeStyle(.clear),
-                                    in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .background(selection == t ? AnyShapeStyle(Color.primary.opacity(0.1)) : AnyShapeStyle(.clear),
+                                    in: Capsule())
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -100,7 +101,7 @@ struct TabStrip: View {
             }
         }
         .padding(3)
-        .background(.fill.quinary, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .background(Color.primary.opacity(0.05), in: Capsule())
     }
 }
 
