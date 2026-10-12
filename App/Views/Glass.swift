@@ -49,6 +49,7 @@ struct CardTitle: View {
     var title: String
     var tint: Color = Theme.series1
     var trailing: String?
+    var help: String?
 
     var body: some View {
         HStack(spacing: 7) {
@@ -57,6 +58,7 @@ struct CardTitle: View {
                 .foregroundStyle(tint)
                 .frame(width: 16)
             Text(title).font(.system(size: 12.5, weight: .semibold))
+            if let help { HelpBadge(help) }
             Spacer(minLength: 6)
             if let trailing {
                 Text(trailing).font(.system(size: 12.5, weight: .semibold, design: .rounded)).monospacedDigit()

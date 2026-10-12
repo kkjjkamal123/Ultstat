@@ -5,12 +5,14 @@ import UltstatKit
 struct LegendRow: View {
     var color: Color?
     var label: String
+    var help: String?
     var value: String
 
     var body: some View {
         HStack(spacing: 8) {
             if let color { RoundedRectangle(cornerRadius: 3).fill(color).frame(width: 11, height: 11) }
             Text(label).foregroundStyle(.secondary).lineLimit(1)
+            if let help { HelpBadge(help) }
             Spacer(minLength: 8)
             // One line always: long values shrink a little rather than wrap mid-number.
             Text(value).monospacedDigit().lineLimit(1).minimumScaleFactor(0.75)

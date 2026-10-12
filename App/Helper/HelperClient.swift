@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import os
 import Security
@@ -57,12 +58,29 @@ final class HelperClient {
         guard FileManager.default.isExecutableFile(atPath: helper),
               let helperHash = Self.cdhash(of: URL(fileURLWithPath: helper)),
               let appHash = Self.cdhash(of: Bundle.main.bundleURL) else { throw HelperInstallError.missingHelper }
-        let requirement = "identifier \"io.github.kkjjkamal23.Ultstat\" and cdhash H\"\(appHash)\""
+        // Signed with a certificate (tools/install-local.sh, or Developer ID): trust that certificate,
+        // so later builds signed the same way keep working without another approval. Ad hoc: pin
+        // this exact build.
+        let requirement = Self.leafCertificateHash(of: Bundle.main.bundleURL)
+            .map { "identifier \"io.github.kkjjkamal23.Ultstat\" and certificate leaf = H\"\($0)\"" }
+            ?? "identifier \"io.github.kkjjkamal23.Ultstat\" and cdhash H\"\(appHash)\""
         let shell = InstallScript.installShell(sourceHelper: helper, expectedCDHash: helperHash,
                                                clientRequirement: requirement, plist: try InstallScript.launchdPlist())
         connection?.invalidate()
         connection = nil
         try await Task.detached(priority: .userInitiated) { try Self.runAsAdministrator(shell) }.value
+    }
+
+    /// SHA-1 of the leaf signing certificate, or nil for ad-hoc signed code.
+    static func leafCertificateHash(of url: URL) -> String? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { return nil }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let certs = (info as? [String: Any])?[kSecCodeInfoCertificates as String] as? [SecCertificate],
+              let leaf = certs.first else { return nil }
+        let der = SecCertificateCopyData(leaf) as Data
+        return Insecure.SHA1.hash(data: der).map { String(format: "%02x", $0) }.joined()
     }
 
     static func cdhash(of url: URL) -> String? {

@@ -132,7 +132,7 @@ private struct TopProcessesCard: View {
 
     var body: some View {
         Card {
-            CardTitle(symbol: symbol, title: "Top processes", tint: .secondary)
+            CardTitle(symbol: symbol, title: "Top processes", tint: .secondary, help: Help.processes)
             ProcessTable(rows: rows, valueTitle: valueTitle)
         }
     }
@@ -161,21 +161,23 @@ private struct CPUModule: View {
                            ("Idle \(MetricFormat.percent(max(0, 1 - c.total)))", .secondary.opacity(0.4))])
         }
         Card {
-            CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: MenuBarItem.cpu.tint, trailing: MetricFormat.percent(c.total))
+            CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: MenuBarItem.cpu.tint, trailing: MetricFormat.percent(c.total),
+                      help: Help.cpuUsage)
             SmoothChart(series: [(model.cpuHistory, Theme.blue)], maxValue: 1)
         }
         if !c.perCore.isEmpty {
             Card {
                 CardTitle(symbol: "square.grid.3x3.fill", title: "Cores", tint: MenuBarItem.cpu.tint,
                           trailing: [c.performance.map { "\(CPUTopology.performanceName.prefix(1)) \(MetricFormat.percent($0))" },
-                                     c.efficiency.map { "E \(MetricFormat.percent($0))" }].compactMap { $0 }.joined(separator: " · "))
+                                     c.efficiency.map { "E \(MetricFormat.percent($0))" }].compactMap { $0 }.joined(separator: " · "),
+                          help: Help.cores)
                 CoreBars(load: c, kinds: model.hub.cpu.topology.kinds)
             }
         }
         Card(spacing: 6) {
             CardTitle(symbol: "info.circle", title: "Details", tint: .secondary)
             if let l = SystemInfo.loadAverage() {
-                LegendRow(color: nil, label: "Average load", value: String(format: "%.2f  %.2f  %.2f", l.0, l.1, l.2))
+                LegendRow(color: nil, label: "Average load", help: Help.loadAverage, value: String(format: "%.2f  %.2f  %.2f", l.0, l.1, l.2))
             }
             LegendRow(color: nil, label: "Power", value: r.componentPower?.cpu.map(formatWatts) ?? (model.helperReady ? "–" : "needs helper"))
             LegendRow(color: nil, label: "Uptime", value: formatDuration(SystemInfo.uptime()))
@@ -207,7 +209,8 @@ private struct GPUModule: View {
             .frame(maxWidth: .infinity)
         }
         Card {
-            CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: tint, trailing: g.map { MetricFormat.percent($0.utilization) })
+            CardTitle(symbol: "chart.xyaxis.line", title: "Usage history", tint: tint, trailing: g.map { MetricFormat.percent($0.utilization) },
+                      help: Help.gpuUsage)
             SmoothChart(series: [(model.gpuHistory, tint)], maxValue: 1)
         }
         Card(spacing: 6) {
@@ -248,7 +251,8 @@ private struct MemoryModule: View {
                 SmoothChart(series: [(model.memoryHistory, Theme.magenta)], maxValue: 1)
             }
             Card(spacing: 6) {
-                CardTitle(symbol: "memorychip", title: "Breakdown", tint: .secondary, trailing: "\(ByteFormat.size(m.used)) of \(ByteFormat.size(m.total))")
+                CardTitle(symbol: "memorychip", title: "Breakdown", tint: .secondary, trailing: "\(ByteFormat.size(m.used)) of \(ByteFormat.size(m.total))",
+                          help: Help.memoryBreakdown)
                 StackedMeter(parts: parts)
                 LegendRow(color: Theme.series1, label: "App", value: ByteFormat.size(m.app))
                 LegendRow(color: Theme.series2, label: "Wired", value: ByteFormat.size(m.wired))
@@ -383,7 +387,7 @@ private struct SensorsModule: View {
             SmoothChart(series: [(model.temperatureHistory(.cpuPerformance), Theme.orange)], maxValue: 110, minValue: 20)
         }
         Card(spacing: 7) {
-            CardTitle(symbol: "sensor.fill", title: "Temperatures", tint: .secondary)
+            CardTitle(symbol: "sensor.fill", title: "Temperatures", tint: .secondary, help: Help.temperatures)
             if groups.isEmpty {
                 // Sensors exist but haven't been read yet (first tick after opening) vs. none at all.
                 EmptyNote(text: (model.hub.sensors?.availableGroups.isEmpty ?? true) ? "No temperature sensors found." : "Reading sensors…")
@@ -443,14 +447,14 @@ private struct PowerModule: View {
             }
         }
         Card {
-            CardTitle(symbol: "bolt.fill", title: "Whole Mac", tint: tint, trailing: r.systemPower.map(formatWatts) ?? "–")
+            CardTitle(symbol: "bolt.fill", title: "Whole Mac", tint: tint, trailing: r.systemPower.map(formatWatts) ?? "–", help: Help.systemPower)
             SmoothChart(series: [(model.powerHistory, Theme.yellow)], maxValue: nil)
         }
         Card(spacing: 7) {
             let c = r.componentPower
             let helper = model.helperState == .running
             let total = max(r.systemPower ?? 1, 0.001)
-            CardTitle(symbol: "square.stack.3d.up.fill", title: "Components", tint: .secondary)
+            CardTitle(symbol: "square.stack.3d.up.fill", title: "Components", tint: .secondary, help: Help.componentPower)
             component("CPU", c?.cpu, total: total, missing: helper ? "–" : "needs helper", tint: Theme.blue)
             component("GPU", c?.gpu, total: total, missing: "–", tint: Theme.blue)
             component("Neural Engine", c?.ane, total: total, missing: helper ? "–" : "needs helper", tint: Theme.blue)
@@ -491,8 +495,10 @@ private struct BatteryModule: View {
             Card {
                 HStack(alignment: .bottom) {
                     BigNumber(caption: "Battery level", value: "\(b.percent) %")
+                    HelpBadge(Help.batteryLevelChart)
                     Spacer()
                     BigNumber(caption: "Time remaining", value: timeRemaining(b), symbol: "clock")
+                    HelpBadge(Help.timeRemaining)
                 }
                 SmoothChart(series: [(model.batteryLevelHistory, Theme.aqua)], maxValue: 100,
                             reference: model.settings.stored.chargeControlEnabled ? Float(model.settings.stored.chargePolicy.limit) : nil,
@@ -519,7 +525,7 @@ private struct BatteryModule: View {
             }
             Card(spacing: 6) {
                 CardTitle(symbol: "heart.fill", title: "Battery health", tint: .pink,
-                          trailing: b.health.map { String(format: "%.0f %%", $0 * 100) })
+                          trailing: b.health.map { String(format: "%.0f %%", $0 * 100) }, help: Help.batteryHealth)
                 LegendRow(color: nil, label: "Design capacity", value: "\(b.designCapacity) mAh")
                 if let full = b.fullChargeCapacity, b.designCapacity > 0 {
                     LegendRow(color: nil, label: "Maximum capacity",
@@ -591,13 +597,22 @@ private struct BatteryModule: View {
 /// AlDente's controls: limit, top up, discharge, calibration, sailing, heat protection.
 private struct ChargeControlSection: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmCalibration = false
 
     var body: some View {
         let p = model.settings.stored.chargePolicy
         let ready = model.helperReady
         let unit = model.settings.stored.temperatureUnit
         Card {
-            CardTitle(symbol: "battery.100percent.bolt", title: "Charge limit", tint: .green)
+            CardTitle(symbol: "battery.100percent.bolt", title: "Charge limit", tint: .green, help: Help.limit)
+            if model.settings.stored.chargeControlEnabled, model.otherChargeControllerRunning {
+                Label {
+                    HStack(spacing: 4) { Text("AlDente is also running"); HelpBadge(Help.otherController) }
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.warning)
+                }
+                .font(.system(size: 11.5, weight: .medium))
+            }
             if !ready {
                 HStack {
                     Text(model.helperNeedsUpdate ? "The charge helper needs updating for this version."
@@ -616,10 +631,13 @@ private struct ChargeControlSection: View {
                 if let e = model.helperError { Text(e).font(.system(size: 11)).foregroundStyle(Theme.critical) }
             }
             HStack {
-                Toggle("Limit", isOn: Binding(get: { model.settings.stored.chargeControlEnabled }, set: { model.setChargeControl($0) }))
+                Toggle(isOn: Binding(get: { model.settings.stored.chargeControlEnabled }, set: { model.setChargeControl($0) })) {
+                    HelpLabel("Limit", help: Help.limit)
+                }
                     .toggleStyle(.switch).controlSize(.small)
                     .accessibilityIdentifier("battery.limitToggle")
                 Spacer()
+                HelpBadge(Help.limitLevel)
                 Text("\(p.limit)%").font(.system(size: 17, weight: .bold, design: .rounded)).monospacedDigit()
             }
             Slider(value: Binding(get: { Double(p.limit) }, set: { v in model.updatePolicy { $0.limit = Int(v) } }), in: 20...100, step: 1)
@@ -627,14 +645,27 @@ private struct ChargeControlSection: View {
                 .tint(.green)
                 .accessibilityIdentifier("battery.limitSlider")
             HStack(spacing: 8) {
-                actionButton("Top Up", "bolt.fill", active: p.topUp) { model.updatePolicy { $0.topUp.toggle() } }
-                actionButton("Discharge", "arrow.down.to.line", active: p.dischargeAboveLimit) { model.updatePolicy { $0.dischargeAboveLimit.toggle() } }
-                actionButton("Calibrate", "arrow.triangle.2.circlepath", active: p.calibration != nil) {
-                    model.updatePolicy { $0.calibration = $0.calibration == nil ? .discharging : nil }
+                actionButton("Top Up", "bolt.fill", active: p.topUp, help: Help.topUp) { model.updatePolicy { $0.topUp.toggle() } }
+                actionButton("Discharge", "arrow.down.to.line", active: p.dischargeAboveLimit, help: Help.discharge) {
+                    model.updatePolicy { $0.dischargeAboveLimit.toggle() }
+                }
+                actionButton("Calibrate", "arrow.triangle.2.circlepath", active: p.calibration != nil, help: Help.calibrate) {
+                    // Starting asks first (it runs for hours); stopping is immediate.
+                    if p.calibration == nil { confirmCalibration = true } else { model.toggleCalibration() }
                 }
             }
+            .confirmationDialog("Start battery calibration?", isPresented: $confirmCalibration) {
+                Button("Start Calibration") { model.toggleCalibration() }
+            } message: {
+                Text(Help.calibrate)
+            }
+            if let progress = model.calibrationProgress(percent: model.panelReadings.battery?.percent) {
+                Text(progress).font(.system(size: 11)).foregroundStyle(.secondary)
+            }
             HStack {
-                Toggle("Sailing", isOn: Binding(get: { p.sailingRange > 0 }, set: { on in model.updatePolicy { $0.sailingRange = on ? 5 : 0 } }))
+                Toggle(isOn: Binding(get: { p.sailingRange > 0 }, set: { on in model.updatePolicy { $0.sailingRange = on ? 5 : 0 } })) {
+                    HelpLabel("Sailing", help: Help.sailing)
+                }
                     .toggleStyle(.switch).controlSize(.small)
                 Spacer()
                 if p.sailingRange > 0 {
@@ -643,8 +674,10 @@ private struct ChargeControlSection: View {
                 }
             }
             HStack {
-                Toggle("Heat protection", isOn: Binding(get: { p.heatProtection != nil },
-                                                        set: { on in model.updatePolicy { $0.heatProtection = on ? 40 : nil } }))
+                Toggle(isOn: Binding(get: { p.heatProtection != nil },
+                                     set: { on in model.updatePolicy { $0.heatProtection = on ? 40 : nil } })) {
+                    HelpLabel("Heat protection", help: Help.heat)
+                }
                     .toggleStyle(.switch).controlSize(.small)
                 Spacer()
                 if let h = p.heatProtection {
@@ -661,7 +694,7 @@ private struct ChargeControlSection: View {
         .font(.system(size: 12.5))
     }
 
-    private func actionButton(_ title: String, _ symbol: String, active: Bool, action: @escaping () -> Void) -> some View {
+    private func actionButton(_ title: String, _ symbol: String, active: Bool, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 4) {
                 Image(systemName: symbol).font(.system(size: 14, weight: .semibold))
@@ -676,6 +709,7 @@ private struct ChargeControlSection: View {
             .animation(Motion.animation, value: active)
         }
         .buttonStyle(.plain)
+        .overlay(alignment: .topTrailing) { HelpBadge(help).padding(5) }
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 }

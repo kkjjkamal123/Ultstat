@@ -369,6 +369,32 @@ final class AppModel {
         settings.resetToDefaults()
     }
 
+    /// AlDente is running: two apps driving the charger can undo each other's changes.
+    var otherChargeControllerRunning: Bool {
+        NSWorkspace.shared.runningApplications.contains { $0.bundleIdentifier?.hasPrefix("com.apphousekitchen.aldente") == true }
+    }
+
+    /// Starts calibration (turning charge control on if needed) or stops it.
+    func toggleCalibration() {
+        if settings.stored.chargePolicy.calibration == nil, !settings.stored.chargeControlEnabled { setChargeControl(true) }
+        updatePolicy { $0.calibration = $0.calibration == nil ? .discharging : nil }
+    }
+
+    /// One line describing calibration progress, or nil when it isn't running.
+    func calibrationProgress(percent: Int?) -> String? {
+        guard let phase = settings.stored.chargePolicy.calibration else { return nil }
+        let waiting = helperReady ? "" : " (waiting for the helper)"
+        switch phase {
+        case .discharging:
+            return "Calibrating, step 1 of 3: discharging to \(Int(CalibrationPhase.floor)) %" + (percent.map { ", now \($0) %" } ?? "") + waiting
+        case .charging:
+            return "Calibrating, step 2 of 3: charging to 100 %" + (percent.map { ", now \($0) %" } ?? "") + waiting
+        case .holding(let until):
+            let m = max(0, Int(until.timeIntervalSinceNow / 60))
+            return "Calibrating, step 3 of 3: holding at 100 % for \(m) more min" + waiting
+        }
+    }
+
     // MARK: History for charts (read on demand by open views only)
 
     /// Histories only for items drawn as sparklines, trimmed to what the menu bar shows.

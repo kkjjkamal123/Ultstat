@@ -34,6 +34,7 @@ struct WindowModulePage: View {
 /// energy users and calibration.
 struct SettingsDashboard: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmCalibration = false
 
     private let columns = [GridItem(.adaptive(minimum: 225), spacing: 14, alignment: .top)]
 
@@ -85,7 +86,7 @@ struct SettingsDashboard: View {
 
     private func health(_ b: BatterySnapshot) -> some View {
         Card(spacing: 6) {
-            CardTitle(symbol: "heart.fill", title: "Battery Health", tint: .pink)
+            CardTitle(symbol: "heart.fill", title: "Battery Health", tint: .pink, help: Help.batteryHealth)
             LegendRow(color: nil, label: "Design capacity", value: "\(b.designCapacity) mAh · 100 %")
             if let full = b.fullChargeCapacity, b.designCapacity > 0 {
                 LegendRow(color: nil, label: "Maximum capacity",
@@ -145,7 +146,7 @@ struct SettingsDashboard: View {
 
     private var energyApps: some View {
         Card(spacing: 6) {
-            CardTitle(symbol: "bolt.horizontal.fill", title: "Apps using significant energy", tint: .orange)
+            CardTitle(symbol: "bolt.horizontal.fill", title: "Apps using significant energy", tint: .orange, help: Help.processes)
             let top = model.hub.processes.topByPower.filter { $0.watts >= 0.1 }.prefix(5)
             if top.isEmpty {
                 Text("No apps using significant energy").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -162,13 +163,22 @@ struct SettingsDashboard: View {
         return Card(spacing: 6) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(running ? "Calibrating" : "Calibration").font(.system(size: 13, weight: .semibold))
-                    Text("Discharges to 15 %, charges to 100 %, holds an hour, then returns to your limit.")
+                    HStack(spacing: 4) {
+                        Text(running ? "Calibrating" : "Calibration").font(.system(size: 13, weight: .semibold))
+                        HelpBadge(Help.calibrate)
+                    }
+                    Text(model.calibrationProgress(percent: model.panelReadings.battery?.percent)
+                         ?? "Discharges to 15 %, charges to 100 %, holds an hour, then returns to your limit.")
                         .font(.system(size: 10.5)).foregroundStyle(.secondary)
                 }
                 Spacer()
                 Button(running ? "Stop Calibration" : "Start Calibration", systemImage: running ? "stop.fill" : "play.fill") {
-                    model.updatePolicy { $0.calibration = $0.calibration == nil ? .discharging : nil }
+                    if running { model.toggleCalibration() } else { confirmCalibration = true }
+                }
+                .confirmationDialog("Start battery calibration?", isPresented: $confirmCalibration) {
+                    Button("Start Calibration") { model.toggleCalibration() }
+                } message: {
+                    Text(Help.calibrate)
                 }
                 .labelStyle(.iconOnly)
                 .buttonStyle(.glass)

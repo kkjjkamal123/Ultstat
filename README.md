@@ -77,6 +77,11 @@ xcodegen generate
 xcodebuild -project Ultstat.xcodeproj -scheme Ultstat -configuration Release build
 ```
 
+To build and install for daily use, run `tools/install-local.sh`. It signs the app with a local
+self-signed certificate (kept in its own keychain), so the charge helper trusts that certificate
+rather than one exact build: you approve the helper once, and later updates keep working without
+another password prompt.
+
 Tests:
 
 ```sh

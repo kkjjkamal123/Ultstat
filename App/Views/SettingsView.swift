@@ -145,24 +145,24 @@ private struct GeneralSettings: View {
     var body: some View {
         @Bindable var settings = model.settings
         Form {
-            Toggle("Launch at login", isOn: Binding(get: { model.launchAtLogin }, set: { model.launchAtLogin = $0 }))
+            Toggle(isOn: Binding(get: { model.launchAtLogin }, set: { model.launchAtLogin = $0 })) { HelpLabel("Launch at login", help: Help.launchAtLogin) }
                 .accessibilityIdentifier("settings.launchAtLogin")
             if let e = model.generalError {
                 Text(e).font(.callout).foregroundStyle(Theme.critical)
             }
-            Picker("Refresh every", selection: $settings.stored.interval) {
+            Picker(selection: $settings.stored.interval) {
                 ForEach(Array(Set([0.5, 0.6, 1.0, 2.0, 3.0, 5.0, settings.stored.interval])).sorted(), id: \.self) { v in
                     Text(v < 1 ? "\(Int((v * 1000).rounded())) ms" : (v == v.rounded() ? "\(Int(v)) s" : String(format: "%.1f s", v))).tag(v)
                 }
-            }
+            } label: { HelpLabel("Refresh every", help: Help.refresh) }
             .accessibilityIdentifier("settings.interval")
-            Picker("Temperature", selection: $settings.stored.temperatureUnit) {
+            Picker(selection: $settings.stored.temperatureUnit) {
                 Text("Celsius").tag(TemperatureUnit.celsius)
                 Text("Fahrenheit").tag(TemperatureUnit.fahrenheit)
-            }
-            Toggle("Refresh every 2 s or slower in Low Power Mode", isOn: $settings.stored.slowInLowPowerMode)
+            } label: { HelpLabel("Temperature", help: Help.temperatureUnit) }
+            Toggle(isOn: $settings.stored.slowInLowPowerMode) { HelpLabel("Refresh every 2 s or slower in Low Power Mode", help: Help.slowInLowPower) }
                 .accessibilityIdentifier("settings.slowInLowPower")
-            Toggle("Show AirPods and Bluetooth headphone batteries", isOn: $settings.stored.bluetoothAccessories)
+            Toggle(isOn: $settings.stored.bluetoothAccessories) { HelpLabel("Show AirPods and Bluetooth headphone batteries", help: Help.bluetooth) }
                 .accessibilityIdentifier("settings.bluetooth")
             Section {
                 Text("""
@@ -172,7 +172,7 @@ private struct GeneralSettings: View {
                     .font(.callout).foregroundStyle(.secondary)
             }
             Section {
-                Button("Reset All Settings…", role: .destructive) { confirmReset = true }
+                HStack { Button("Reset All Settings…", role: .destructive) { confirmReset = true }; HelpBadge(Help.reset) }
                     .accessibilityIdentifier("settings.reset")
             }
         }
@@ -201,6 +201,7 @@ private struct MenuBarSettings: View {
                 ForEach(MenuBarItem.allCases) { item in
                     HStack(spacing: 12) {
                         Label(item.title, systemImage: item.symbol)
+                        HelpBadge(Help.menuItem)
                         Spacer()
                         if [.cpu, .gpu, .memory, .temperature, .power].contains(item) {
                             Picker("Style", selection: Binding(get: { model.settings.style(for: item) },
@@ -222,22 +223,22 @@ private struct MenuBarSettings: View {
                 }
             }
             Section {
-                Picker("Before each value", selection: $settings.stored.itemLabel) {
+                Picker(selection: $settings.stored.itemLabel) {
                     Text("Name above value").tag(ItemLabel.name)
                     Text("Icon").tag(ItemLabel.icon)
                     Text("Nothing").tag(ItemLabel.none)
-                }
+                } label: { HelpLabel("Before each value", help: Help.itemLabel) }
                 .accessibilityIdentifier("settings.itemLabel")
-                LabeledContent("Spacing between items") {
+                LabeledContent {
                     HStack {
                         Slider(value: $settings.stored.itemSpacing, in: AppSettings.Stored.itemSpacingRange, step: 1)
                             .frame(width: 180)
                             .accessibilityIdentifier("settings.spacing")
                         Text("\(Int(settings.stored.itemSpacing)) pt").monospacedDigit().frame(width: 40, alignment: .trailing)
                     }
-                }
+                } label: { HelpLabel("Spacing between items", help: Help.spacing) }
                 .disabled(settings.stored.separateItems)
-                Toggle("Use a separate menu bar item for each metric", isOn: $settings.stored.separateItems)
+                Toggle(isOn: $settings.stored.separateItems) { HelpLabel("Use a separate menu bar item for each metric", help: Help.separateItems) }
                     .accessibilityIdentifier("settings.separate")
             } footer: {
                 Text(settings.stored.separateItems
@@ -267,9 +268,11 @@ private struct BatterySettings: View {
                 helperRow
             }
             Section {
-                Toggle("Limit charging", isOn: Binding(get: { model.settings.stored.chargeControlEnabled }, set: { model.setChargeControl($0) }))
+                Toggle(isOn: Binding(get: { model.settings.stored.chargeControlEnabled }, set: { model.setChargeControl($0) })) {
+                    HelpLabel("Limit charging", help: Help.limit)
+                }
                     .accessibilityIdentifier("settings.chargeControl")
-                LabeledContent("Stop charging at") {
+                LabeledContent {
                     HStack {
                         Slider(value: Binding(get: { Double(policy.limit) }, set: { v in model.updatePolicy { $0.limit = Int(v) } }),
                                in: 20...100, step: 5)
@@ -277,19 +280,19 @@ private struct BatterySettings: View {
                             .accessibilityIdentifier("settings.limitSlider")
                         Text("\(policy.limit)%").monospacedDigit().frame(width: 40, alignment: .trailing)
                     }
-                }
-                Stepper("Sailing range: \(policy.sailingRange)%", value: self.policy(\.sailingRange), in: 0...20)
+                } label: { HelpLabel("Stop charging at", help: Help.limitLevel) }
+                Stepper(value: self.policy(\.sailingRange), in: 0...20) { HelpLabel("Sailing range: \(policy.sailingRange)%", help: Help.sailing) }
                     .accessibilityIdentifier("settings.sailing")
-                Toggle("Discharge to the limit when above it", isOn: self.policy(\.dischargeAboveLimit))
+                Toggle(isOn: self.policy(\.dischargeAboveLimit)) { HelpLabel("Discharge to the limit when above it", help: Help.discharge) }
                     .accessibilityIdentifier("settings.discharge")
-                Toggle("Heat protection", isOn: Binding(get: { policy.heatProtection != nil },
-                                                        set: { v in model.updatePolicy { $0.heatProtection = v ? 40 : nil } }))
+                Toggle(isOn: Binding(get: { policy.heatProtection != nil },
+                                     set: { v in model.updatePolicy { $0.heatProtection = v ? 40 : nil } })) { HelpLabel("Heat protection", help: Help.heat) }
                     .accessibilityIdentifier("settings.heat")
                 if let h = policy.heatProtection {
                     Stepper("Pause charging above \(unit.format(Float(h)))\(unit == .celsius ? "C" : "F")",
                             value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
                 }
-                Toggle("Use gauge charge instead of macOS percentage", isOn: self.policy(\.useHardwarePercent))
+                Toggle(isOn: self.policy(\.useHardwarePercent)) { HelpLabel("Use gauge charge instead of macOS percentage", help: Help.gaugePercent) }
                 HStack {
                     Button(policy.topUp ? "Cancel Top Up" : "Top Up to 100% Once") { model.updatePolicy { $0.topUp.toggle() } }
                         .accessibilityIdentifier("settings.topUp")
@@ -309,12 +312,12 @@ private struct BatterySettings: View {
                 }
             }
             Section {
-                Picker("LED", selection: self.policy(\.magSafeLED)) {
+                Picker(selection: self.policy(\.magSafeLED)) {
                     Text("System").tag(0)
                     Text("Off").tag(1)
                     Text("Green").tag(3)
                     Text("Amber").tag(4)
-                }
+                } label: { HelpLabel("LED", help: Help.magSafe) }
                 .accessibilityIdentifier("settings.magsafe")
                 .disabled(!model.settings.stored.chargeControlEnabled)
             } header: {
@@ -336,37 +339,38 @@ private struct BatterySettings: View {
     @ViewBuilder private var helperRow: some View {
         switch model.helperState {
         case .running where model.helperNeedsUpdate:
-            LabeledContent("Charge helper") {
+            LabeledContent {
                 Button(model.installing ? "Updating…" : "Update Helper") { model.installHelper() }.disabled(model.installing)
-            }
+            } label: { HelpLabel("Charge helper", help: Help.helper) }
             Text("This version of Ultstat needs to update its helper. You'll be asked for your password.")
                 .font(.callout).foregroundStyle(.secondary)
         case .running:
-            LabeledContent("Charge helper") {
+            LabeledContent {
                 HStack {
                     Label("Running · \(model.chargeStatus?.mechanism.label ?? "…")", systemImage: "checkmark.seal.fill")
                         .foregroundStyle(.green)
                     Button("Uninstall") { model.uninstallHelper() }
                         .controlSize(.small)
                         .accessibilityIdentifier("settings.uninstallHelper")
+                    HelpBadge(Help.uninstallHelper)
                 }
-            }
+            } label: { HelpLabel("Charge helper", help: Help.helper) }
         case .needsApproval:
-            LabeledContent("Charge helper") {
+            LabeledContent {
                 Button("Approve in System Settings") { model.installHelper() }
-            }
+            } label: { HelpLabel("Charge helper", help: Help.helper) }
             Text("Allow “Ultstat” under System Settings › General › Login Items & Extensions.").font(.callout).foregroundStyle(.secondary)
         case .notInstalled:
-            LabeledContent("Charge helper") {
+            LabeledContent {
                 Button("Install") { model.installHelper() }.accessibilityIdentifier("settings.installHelper")
-            }
+            } label: { HelpLabel("Charge helper", help: Help.helper) }
             Text("""
                 Charge limiting needs a small background helper with administrator rights. \
                 It only accepts commands from this copy of Ultstat and restores normal charging when removed.
                 """)
                 .font(.callout).foregroundStyle(.secondary)
         case .unavailable(let why):
-            LabeledContent("Charge helper") { Text(why).foregroundStyle(.red) }
+            LabeledContent { Text(why).foregroundStyle(.red) } label: { HelpLabel("Charge helper", help: Help.helper) }
         }
     }
 }
@@ -420,7 +424,7 @@ private struct AlertSettings: View {
                     }
                 }
             } footer: {
-                Text("Alerts notify once, then re-arm after the value has clearly recovered.")
+                Text(Help.alerts)
                     .font(.callout).foregroundStyle(.secondary)
             }
             Menu("Add Alert") {
