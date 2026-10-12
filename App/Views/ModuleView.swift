@@ -260,9 +260,10 @@ private struct NetworkModule: View {
         LegendRow(color: nil, label: "Status", value: status.map { $0.connected ? "Connected" : "Offline" } ?? "–")
         if let s = status, s.connected { LegendRow(color: nil, label: "Connection", value: s.interfaceType + (s.expensive ? " (metered)" : "")) }
         if let n {
-            ForEach(n.interfaces.prefix(2), id: \.self) { name in
-                let a = SystemInfo.addresses(of: name)
-                if let v4 = a.ipv4 { LegendRow(color: nil, label: "Local IP (\(name))", value: v4) }
+            // Only interfaces that actually have an address (en2/en3 are often idle bridge ports).
+            let addressed = n.interfaces.map(SystemInfo.addresses(of:)).filter { $0.ipv4 != nil }.prefix(2)
+            ForEach(Array(addressed), id: \.name) { a in
+                LegendRow(color: nil, label: "Local IP (\(a.name))", value: a.ipv4 ?? "")
             }
             LegendRow(color: nil, label: "Total download", value: ByteFormat.size(n.totalIn))
             LegendRow(color: nil, label: "Total upload", value: ByteFormat.size(n.totalOut))
