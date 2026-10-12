@@ -98,6 +98,9 @@ final class ChargeController: @unchecked Sendable {
         guard let actuator, !sleeping, let snap = battery?.latest else { return }
         let percent = policy.useHardwarePercent ? (snap.hardwarePercent ?? Double(snap.percent)) : Double(snap.percent)
         lastPercent = percent
+        // ExternalConnected stays true while the adapter is bypassed for discharge (observed on M5 with
+        // CHIE=0x08: IOKit still reported ExternalConnected=Yes, IsCharging=No). If some firmware
+        // reported false, the state machine would restore the adapter: the safe failure direction.
         let inputs = ChargeInputs(percent: percent, externalConnected: snap.externalConnected, batteryTemperature: batteryTemperature())
         let out = machine.step(policy: policy, inputs: inputs)
         do {
@@ -199,9 +202,8 @@ final class ChargeController: @unchecked Sendable {
     /// (macOS 27+) is enforced by macOS itself, so only the discharge is cancelled there.
     private func prepareForSleep() {
         guard let actuator else { return }
-        let paused = ChargeOutputs(allowCharging: !policy.isLimiting || policy.topUp, discharge: false)
-        let mode: ChargeMode = paused.allowCharging ? machine.mode : .holding
-        do { try actuator.apply(paused, mode: mode == .discharging ? .holding : mode, policy: policy, percent: lastPercent) } catch {
+        let plan = ChargeStateMachine.sleepPlan(policy: policy)
+        do { try actuator.apply(plan.outputs, mode: plan.mode, policy: policy, percent: lastPercent) } catch {
             log.error("sleep prep failed: \(String(describing: error), privacy: .public)")
         }
     }

@@ -17,6 +17,8 @@ public enum ChargeMode: String, Codable, Sendable {
     case toppingUp
     /// Calibration cycle in progress.
     case calibrating
+    /// Charging paused at the current level (used while the helper can't supervise, e.g. asleep).
+    case frozen
 }
 
 public struct ChargeInputs: Equatable, Sendable {
@@ -123,6 +125,22 @@ public struct ChargeStateMachine: Sendable {
 
         mode = .charging
         return .stock
+    }
+
+    // MARK: Sleep
+
+    /// What to apply before the system sleeps, when the helper is frozen and can't react to the
+    /// battery. Never discharges; never blocks a top-up or the charging part of a calibration.
+    public static func sleepPlan(policy raw: ChargePolicy) -> (outputs: ChargeOutputs, mode: ChargeMode) {
+        let policy = raw.validated()
+        switch policy.calibration {
+        case .charging, .holding: return (.stock, .calibrating)
+        case .discharging: return (ChargeOutputs(allowCharging: false, discharge: false), .frozen)
+        case nil: break
+        }
+        if policy.topUp { return (.stock, .toppingUp) }
+        guard policy.isLimiting else { return (.stock, .charging) }
+        return (ChargeOutputs(allowCharging: false, discharge: false), .holding)
     }
 
     // MARK: Calibration

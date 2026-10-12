@@ -186,7 +186,7 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
             return policy.limit
         case .sailing:
             return max(ChargePolicy.limitRange.lowerBound, policy.limit - policy.sailingRange)
-        case .heatPaused:
+        case .heatPaused, .frozen:
             // Freeze at the current level: macOS won't charge above it.
             return max(ChargePolicy.limitRange.lowerBound, min(100, Int(percent.rounded(.down))))
         case .calibrating:

@@ -36,8 +36,14 @@ final class AppModel {
     /// A newer app may ship a changed helper; replace an installed older one once at launch.
     private func upgradeHelperIfNeeded() async {
         guard helper.state == .running else { return }
-        let installed = await helper.version()
-        guard let installed, installed != ultstatHelperVersion else { return }
+        var installed = await helper.version()
+        if installed == nil {
+            // An old ad-hoc helper pins the previous app's cdhash and rejects this one, so "no answer"
+            // after an update means "replace it". Retry once to rule out a transient XPC failure.
+            try? await Task.sleep(for: .seconds(2))
+            installed = await helper.version()
+        }
+        guard installed != ultstatHelperVersion else { return }
         do {
             if helper.isLegacyInstalled {
                 try helper.installWithAdministratorPrompt()

@@ -184,3 +184,35 @@ import Testing
         #expect(p.calibration == nil && p.heatProtection == nil)
     }
 }
+
+@Suite struct SleepPlanTests {
+    @Test func neverDischargesAsleep() {
+        let policies: [ChargePolicy] = [
+            ChargePolicy(limit: 60, dischargeAboveLimit: true),
+            ChargePolicy(limit: 80, calibration: .discharging),
+            ChargePolicy(limit: 80, calibration: .charging),
+            ChargePolicy(limit: 80, topUp: true),
+            .stock,
+        ]
+        for p in policies { #expect(!ChargeStateMachine.sleepPlan(policy: p).outputs.discharge) }
+    }
+
+    @Test func calibrationChargingContinuesAsleep() {
+        let plan = ChargeStateMachine.sleepPlan(policy: ChargePolicy(limit: 80, calibration: .charging))
+        #expect(plan.outputs.allowCharging)
+        #expect(NativeLimitActuator.target(for: plan.outputs, mode: plan.mode, policy: ChargePolicy(limit: 80), percent: 40) == nil,
+                "native limit must not cap a calibration at 80 % overnight")
+    }
+
+    @Test func dischargePhaseFreezesAtCurrentLevel() {
+        let plan = ChargeStateMachine.sleepPlan(policy: ChargePolicy(limit: 80, calibration: .discharging))
+        #expect(plan.mode == .frozen && !plan.outputs.allowCharging)
+        #expect(NativeLimitActuator.target(for: plan.outputs, mode: plan.mode, policy: ChargePolicy(limit: 80), percent: 47.6) == 47)
+    }
+
+    @Test func limitHoldsAndStockStaysStock() {
+        #expect(ChargeStateMachine.sleepPlan(policy: ChargePolicy(limit: 80)).mode == .holding)
+        #expect(ChargeStateMachine.sleepPlan(policy: .stock).outputs == .stock)
+        #expect(ChargeStateMachine.sleepPlan(policy: ChargePolicy(limit: 80, topUp: true)).outputs.allowCharging)
+    }
+}

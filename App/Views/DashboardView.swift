@@ -302,6 +302,7 @@ struct BatteryCard: View {
             case .heatPaused: return "Paused: battery warm"
             case .toppingUp: return "Topping up"
             case .calibrating: return calibrationText
+            case .frozen: return "Paused"
             case .charging, .onBattery: break
             }
         }
