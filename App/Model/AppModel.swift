@@ -141,14 +141,37 @@ final class AppModel {
         }
     }
 
+    /// Prefers SMAppService; falls back to the administrator prompt when the system refuses to
+    /// register an unsigned daemon (common for builds from source without a signing identity).
     func installHelper() {
         do {
             try helper.install()
             helperError = nil
         } catch {
-            helperError = error.localizedDescription
+            do {
+                try helper.installWithAdministratorPrompt()
+                helperError = nil
+            } catch HelperInstallError.cancelled {
+                helperError = nil
+            } catch let fallback {
+                helperError = "\(error.localizedDescription) \(fallback.localizedDescription)"
+            }
         }
         helperState = helper.state
+        Task { await refreshHelper() }
+    }
+
+    func uninstallHelper() {
+        Task {
+            do {
+                try await helper.uninstall()
+                settings.stored.chargeControlEnabled = false
+                helperError = nil
+            } catch {
+                helperError = error.localizedDescription
+            }
+            await refreshHelper()
+        }
     }
 
     func updatePolicy(_ change: (inout ChargePolicy) -> Void) {

@@ -160,7 +160,13 @@ private struct BatterySettings: View {
         switch model.helperState {
         case .running:
             LabeledContent("Charge helper") {
-                Label("Running · \(model.chargeStatus?.mechanism.label ?? "…")", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                HStack {
+                    Label("Running · \(model.chargeStatus?.mechanism.label ?? "…")", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Button("Uninstall") { model.uninstallHelper() }
+                        .controlSize(.small)
+                        .accessibilityIdentifier("settings.uninstallHelper")
+                }
             }
         case .needsApproval:
             LabeledContent("Charge helper") {

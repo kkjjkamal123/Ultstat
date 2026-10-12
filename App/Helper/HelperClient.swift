@@ -19,8 +19,14 @@ final class HelperClient {
     private let service = SMAppService.daemon(plistName: "io.github.kkjjkamal23.Ultstat.Helper.plist")
     private var connection: NSXPCConnection?
 
+    static let legacyPlist = InstallScript.plistPath
+
+    /// True when installed through the administrator-password fallback (unsigned builds).
+    var isLegacyInstalled: Bool { FileManager.default.fileExists(atPath: Self.legacyPlist) }
+
     var state: State {
-        switch service.status {
+        if isLegacyInstalled { return .running }
+        return switch service.status {
         case .enabled: .running
         case .requiresApproval: .needsApproval
         // `.notFound` is also what a daemon that was never registered reports, so it means
@@ -35,11 +41,38 @@ final class HelperClient {
         if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 
+    /// Fallback for builds without a signing identity, where `SMAppService` refuses to register a daemon.
+    /// Installs the LaunchDaemon through the standard administrator-password prompt (see InstallScript).
+    func installWithAdministratorPrompt() throws {
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/\(InstallScript.label)").path
+        guard FileManager.default.isExecutableFile(atPath: helper) else { throw HelperInstallError.missingHelper }
+        let plist = try InstallScript.launchdPlist(helperPath: helper)
+        try Self.runAsAdministrator(InstallScript.installShell(plist: plist))
+    }
+
     func uninstall() async throws {
         _ = await restoreDefaults()
         connection?.invalidate()
         connection = nil
-        try await service.unregister()
+        if isLegacyInstalled {
+            try Self.runAsAdministrator(InstallScript.uninstallShell)
+        } else {
+            try await service.unregister()
+        }
+    }
+
+    // MARK: Administrator prompt
+
+    private static func runAsAdministrator(_ shell: String) throws {
+        let source = InstallScript.appleScript(shell: shell, prompt: "Ultstat needs to install its charge helper.")
+        var error: NSDictionary?
+        guard let script = NSAppleScript(source: source) else { throw HelperInstallError.scriptFailed("could not build script") }
+        script.executeAndReturnError(&error)
+        if let error {
+            let code = error[NSAppleScript.errorNumber] as? Int ?? 0
+            if code == -128 { throw HelperInstallError.cancelled }
+            throw HelperInstallError.scriptFailed(error[NSAppleScript.errorMessage] as? String ?? "error \(code)")
+        }
     }
 
     // MARK: Calls
@@ -99,6 +132,20 @@ final class HelperClient {
                 return
             }
             body(p) { value in if once.claim() { cont.resume(returning: value) } }
+        }
+    }
+}
+
+enum HelperInstallError: LocalizedError {
+    case missingHelper
+    case cancelled
+    case scriptFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingHelper: "The helper is missing from the app bundle. Reinstall Ultstat."
+        case .cancelled: "Installation was cancelled."
+        case .scriptFailed(let why): "Installation failed: \(why)"
         }
     }
 }
