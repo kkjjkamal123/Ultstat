@@ -10,20 +10,18 @@ import UltstatKit
 
 // MARK: - Motion
 
-/// Animation policy. Readings arrive every 0.6 s; an animation on every one of them keeps the
-/// window redrawing at the display's full rate (120 Hz on ProMotion), measured at 160-240 ms/s of
-/// CPU with a panel open. So: short animations, only for changes big enough to see (values are
-/// bucketed before they key an animation), only render-side transforms (trim, scale) that don't
-/// relayout, and none at all in Low Power Mode or with Reduce Motion.
+/// Animation policy. Only render-side changes animate (trim, scale, shape paths), never layout:
+/// layout-driven animations at every reading kept the panel relaying out at 120 Hz (160-240 ms/s).
 enum Motion {
+    /// Off only with Reduce Motion. (Low Power Mode keeps them: they are short, GPU-composited and
+    /// run only while a panel is open.)
     static var enabled: Bool {
-        !ProcessInfo.processInfo.isLowPowerModeEnabled && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion && !UserDefaults.standard.bool(forKey: "UltstatNoMotion")
     }
 
-    static var animation: Animation? { enabled ? .smooth(duration: 0.3) : nil }
+    /// Rings, gauges, bars and meters.
+    static var animation: Animation? { enabled ? .smooth(duration: 0.5) : nil }
 
-    /// Animation key that only changes when `value` (0...1) moves by about 2 %.
-    static func bucket(_ value: Double) -> Int { Int((value * 50).rounded()) }
 }
 
 // MARK: - Surfaces
@@ -103,7 +101,12 @@ struct IconTile: View {
 // MARK: - Charts
 
 /// Smooth area chart: gradient fill under the first series, glowing line, a dot on the newest value,
-/// faint grid, optional dashed reference line (a charge limit, a threshold). One Canvas draw.
+/// faint grid, optional dashed reference line (a charge limit, a threshold).
+///
+/// The curves are Core Animation shape layers (ChartLayerView). Each reading updates them once,
+/// atomically, and the render server glides the new point in (scroll left, ease any rescale), so
+/// the motion costs the app no per-frame work. Drawing them in SwiftUI meant re-rasterising every
+/// frame on the CPU (measured ~300 ms/s with a panel open).
 struct SmoothChart: View {
     var series: [([Float], Color)]
     var maxValue: Float?
@@ -111,57 +114,43 @@ struct SmoothChart: View {
     var reference: Float?
     var referenceColor: Color = Theme.series2
     var height: CGFloat = 78
+    /// Tile sparkline: no background, grid or marker.
+    var compact = false
 
     var body: some View {
         let all = series.flatMap(\.0)
         let top = maxValue ?? max((all.max() ?? 1) * 1.15, minValue + 0.0001)
-        Canvas { ctx, size in
-            let plot = CGRect(origin: .zero, size: size).insetBy(dx: 0, dy: 5)
-            for i in 1...3 {
-                let y = plot.minY + plot.height * CGFloat(i) / 4
-                ctx.stroke(Path { $0.move(to: CGPoint(x: 0, y: y)); $0.addLine(to: CGPoint(x: size.width, y: y)) },
-                           with: .color(.primary.opacity(0.06)), lineWidth: 0.5)
-            }
-            func point(_ v: Float, _ i: Int, _ n: Int) -> CGPoint {
-                let f = CGFloat(min(max((v - minValue) / max(top - minValue, 0.0001), 0), 1))
-                return CGPoint(x: n > 1 ? size.width * CGFloat(i) / CGFloat(n - 1) : size.width, y: plot.maxY - plot.height * f)
-            }
-            if let reference {
-                let y = point(reference, 0, 1).y
-                ctx.stroke(Path { $0.move(to: CGPoint(x: 0, y: y)); $0.addLine(to: CGPoint(x: size.width, y: y)) },
-                           with: .color(referenceColor.opacity(0.9)), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
-            }
-            for (index, (values, tint)) in series.enumerated() where values.count > 1 {
-                let pts = values.enumerated().map { point($1, $0, values.count) }
-                let line = Self.smoothPath(pts, minY: plot.minY, maxY: plot.maxY)
-                if index == 0 {
-                    var area = line
-                    area.addLine(to: CGPoint(x: pts[pts.count - 1].x, y: size.height))
-                    area.addLine(to: CGPoint(x: pts[0].x, y: size.height))
-                    area.closeSubpath()
-                    ctx.fill(area, with: .linearGradient(Gradient(colors: [tint.opacity(0.42), tint.opacity(0.03)]),
-                                                         startPoint: CGPoint(x: 0, y: plot.minY), endPoint: CGPoint(x: 0, y: size.height)))
+        ZStack {
+            if !compact {
+                Canvas { ctx, size in
+                    let plot = CGRect(origin: .zero, size: size).insetBy(dx: 0, dy: ChartLayerView.inset)
+                    for i in 1...3 {
+                        let y = plot.minY + plot.height * CGFloat(i) / 4
+                        ctx.stroke(Path { $0.move(to: CGPoint(x: 0, y: y)); $0.addLine(to: CGPoint(x: size.width, y: y)) },
+                                   with: .color(.primary.opacity(0.06)), lineWidth: 0.5)
+                    }
+                    if let reference {
+                        let f = CGFloat(min(max((reference - minValue) / max(top - minValue, 0.0001), 0), 1))
+                        let y = plot.maxY - plot.height * f
+                        ctx.stroke(Path { $0.move(to: CGPoint(x: 0, y: y)); $0.addLine(to: CGPoint(x: size.width, y: y)) },
+                                   with: .color(referenceColor.opacity(0.9)), style: StrokeStyle(lineWidth: 1.2, dash: [4, 3]))
+                    }
                 }
-                ctx.stroke(line, with: .color(tint.opacity(0.3)), style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-                ctx.stroke(line, with: .color(tint), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                // Newest value: an 8 pt marker with a 2 pt surface ring so it separates from the line.
-                let last = pts[pts.count - 1]
-                ctx.fill(Path(ellipseIn: CGRect(x: last.x - 6, y: last.y - 6, width: 12, height: 12)), with: .color(.primary.opacity(0.25)))
-                ctx.fill(Path(ellipseIn: CGRect(x: last.x - 4, y: last.y - 4, width: 8, height: 8)), with: .color(tint))
             }
+            LayerChart(series: series, top: top, minValue: minValue, compact: compact)
         }
         .frame(height: height)
-        .padding(.horizontal, 6)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, compact ? 0 : 6)
+        .background(compact ? Color.clear : Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: compact ? 3 : 12, style: .continuous))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("History chart")
     }
 
     /// Catmull-Rom spline through the points, as cubic Béziers, with control points clamped to the
     /// plot so the curve never overshoots past 0 % or 100 %.
-    static func smoothPath(_ p: [CGPoint], minY: CGFloat, maxY: CGFloat) -> Path {
-        var path = Path()
+    static func smoothPath(_ p: [CGPoint], minY: CGFloat, maxY: CGFloat) -> CGMutablePath {
+        let path = CGMutablePath()
         guard let first = p.first else { return path }
         path.move(to: first)
         guard p.count > 2 else {
@@ -179,6 +168,166 @@ struct SmoothChart: View {
     }
 }
 
+private struct LayerChart: NSViewRepresentable {
+    var series: [([Float], Color)]
+    var top: Float
+    var minValue: Float
+    var compact: Bool
+
+    func makeNSView(context: Context) -> ChartLayerView { ChartLayerView() }
+
+    func updateNSView(_ view: ChartLayerView, context: Context) {
+        view.apply(series.map { ChartLayerView.Series(values: $0.0, color: NSColor($0.1)) }, top: top, minValue: minValue, compact: compact)
+    }
+}
+
+/// Chart curves as CAShapeLayers inside one container layer. A new reading replaces the paths in one
+/// transaction (so nothing ever draws twice or steps back), then a single transform animation in the
+/// render server slides the container one sample to the left and eases the vertical scale.
+final class ChartLayerView: NSView {
+    struct Series: Equatable {
+        var values: [Float]
+        var color: NSColor
+    }
+
+    static let inset: CGFloat = 5
+
+    private let container = CALayer()
+    private var layers: [(gradient: CAGradientLayer, area: CAShapeLayer, glow: CAShapeLayer, line: CAShapeLayer,
+                          halo: CAShapeLayer, dot: CAShapeLayer)] = []
+    private var series: [Series] = []
+    private var top: Float = 1
+    private var minValue: Float = 0
+    private var compact = false
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        container.anchorPoint = .zero
+        layer?.addSublayer(container)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func apply(_ new: [Series], top newTop: Float, minValue: Float, compact: Bool) {
+        guard new != series || newTop != top || compact != self.compact else { return }
+        let old = series
+        let oldTop = top
+        // A normal tick: same series, each one sample longer (growing) or the same length (full buffer, advanced).
+        let advanced = !old.isEmpty && old.count == new.count && zip(old, new).allSatisfy {
+            $1.values.count >= $0.values.count && $1.values.count > 1 && $0.values != $1.values
+        }
+        series = new
+        top = newTop
+        self.minValue = minValue
+        self.compact = compact
+        redraw()
+        guard advanced, Motion.enabled, window?.occlusionState.contains(.visible) == true, let n = new.first?.values.count, n > 1 else { return }
+        let step = bounds.width / CGFloat(n - 1)
+        let span = CGFloat(oldTop - minValue)
+        let scaleY = span > 0 ? CGFloat(newTop - minValue) / span : 1
+        let from = CATransform3DConcat(CATransform3DMakeScale(1, scaleY, 1), CATransform3DMakeTranslation(step, 0, 0))
+        let slide = CABasicAnimation(keyPath: "transform")
+        slide.fromValue = NSValue(caTransform3D: from)
+        slide.toValue = NSValue(caTransform3D: CATransform3DIdentity)
+        slide.duration = 0.55
+        slide.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        container.add(slide, forKey: "slide")
+    }
+
+    override func layout() {
+        super.layout()
+        redraw()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        redraw()
+    }
+
+    private func redraw() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
+        container.frame = bounds
+        container.removeAnimation(forKey: "slide")
+        while layers.count < series.count { addSeriesLayers() }
+        while layers.count > series.count { removeSeriesLayers() }
+        let plot = bounds.insetBy(dx: 0, dy: compact ? 1 : Self.inset)
+        for (index, s) in series.enumerated() {
+            let l = layers[index]
+            var color = s.color.cgColor
+            effectiveAppearance.performAsCurrentDrawingAppearance { color = s.color.cgColor }
+            let pts = points(s.values, in: plot)
+            let line = pts.count > 1 ? SmoothChart.smoothPath(pts, minY: plot.minY, maxY: plot.maxY) : CGMutablePath()
+            l.line.path = line
+            l.line.strokeColor = color
+            l.line.lineWidth = compact ? 1.5 : 2
+            l.glow.path = compact ? nil : line
+            l.glow.strokeColor = color.copy(alpha: 0.3)
+            let area = line.mutableCopy() ?? CGMutablePath()
+            if let last = pts.last, let first = pts.first {
+                area.addLine(to: CGPoint(x: last.x, y: bounds.minY))
+                area.addLine(to: CGPoint(x: first.x, y: bounds.minY))
+                area.closeSubpath()
+            }
+            l.area.path = index == 0 ? area : nil
+            l.gradient.frame = bounds
+            l.gradient.colors = [color.copy(alpha: compact ? 0.3 : 0.42) as Any, color.copy(alpha: 0.03) as Any]
+            l.gradient.isHidden = index != 0
+            if let last = pts.last, !compact {
+                l.dot.path = CGPath(ellipseIn: CGRect(x: last.x - 4, y: last.y - 4, width: 8, height: 8), transform: nil)
+                l.dot.fillColor = color
+                l.halo.path = CGPath(ellipseIn: CGRect(x: last.x - 6, y: last.y - 6, width: 12, height: 12), transform: nil)
+                l.halo.fillColor = NSColor.labelColor.cgColor.copy(alpha: 0.25)
+            } else {
+                l.dot.path = nil
+                l.halo.path = nil
+            }
+        }
+    }
+
+    /// Points in layer coordinates (origin bottom-left), one extra off the left edge so the slide
+    /// never reveals a gap.
+    private func points(_ values: [Float], in plot: CGRect) -> [CGPoint] {
+        let n = values.count
+        guard n > 1 else { return [] }
+        let step = bounds.width / CGFloat(n - 1)
+        let span = max(top - minValue, 0.0001)
+        func y(_ v: Float) -> CGFloat { plot.minY + plot.height * CGFloat(min(max((v - minValue) / span, 0), 1)) }
+        return [CGPoint(x: -step, y: y(values[0]))] + values.enumerated().map { CGPoint(x: CGFloat($0) * step, y: y($1)) }
+    }
+
+    private func addSeriesLayers() {
+        let gradient = CAGradientLayer()
+        gradient.startPoint = CGPoint(x: 0.5, y: 1)
+        gradient.endPoint = CGPoint(x: 0.5, y: 0)
+        let area = CAShapeLayer()
+        gradient.mask = area
+        func stroke(_ width: CGFloat) -> CAShapeLayer {
+            let s = CAShapeLayer()
+            s.fillColor = nil
+            s.lineWidth = width
+            s.lineCap = .round
+            s.lineJoin = .round
+            return s
+        }
+        let glow = stroke(5), line = stroke(2), halo = CAShapeLayer(), dot = CAShapeLayer()
+        for l in [gradient, glow, line, halo, dot] as [CALayer] {
+            l.actions = ["path": NSNull(), "contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+            container.addSublayer(l)
+        }
+        layers.append((gradient, area, glow, line, halo, dot))
+    }
+
+    private func removeSeriesLayers() {
+        guard let l = layers.popLast() else { return }
+        for layer in [l.gradient, l.glow, l.line, l.halo, l.dot] as [CALayer] { layer.removeFromSuperlayer() }
+    }
+}
+
 // MARK: - Rings and gauges
 
 /// Donut of parts (fractions of 1) with a centre value; arcs animate smoothly between readings.
@@ -189,34 +338,15 @@ struct AnimatedRing: View {
     var lineWidth: CGFloat = 11
 
     var body: some View {
-        let segments = Self.segments(parts)
         ZStack {
-            Circle().stroke(Color.primary.opacity(0.09), lineWidth: lineWidth)
-            ForEach(Array(segments.enumerated()), id: \.offset) { _, s in
-                Circle()
-                    .trim(from: s.start, to: s.end)
-                    .stroke(s.color.gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: segments.count == 1 ? .round : .butt))
-                    .rotationEffect(.degrees(-90))
-            }
+            ArcLayer(parts: parts, lineWidth: lineWidth, roundCaps: parts.count == 1)
             VStack(spacing: 0) {
                 Text(center).font(.system(size: 21, weight: .bold, design: .rounded)).monospacedDigit()
                 if let caption { Text(caption).font(.system(size: 9.5, weight: .medium)).foregroundStyle(.secondary) }
             }
         }
-        .padding(lineWidth / 2)
-        .animation(Motion.animation, value: segments.map { Motion.bucket(Double($0.end)) })
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(caption ?? "") \(center)")
-    }
-
-    private static func segments(_ parts: [(Float, Color)]) -> [(start: CGFloat, end: CGFloat, color: Color)] {
-        var start: CGFloat = 0
-        let gap: CGFloat = parts.filter { $0.0 > 0.005 }.count > 1 ? 0.006 : 0
-        return parts.map { fraction, color in
-            let sweep = CGFloat(min(max(fraction, 0), 1))
-            defer { start += sweep }
-            return (start, max(start, min(1, start + sweep - gap)), color)
-        }
     }
 }
 
@@ -232,14 +362,9 @@ struct ArcGauge: View {
     var lineWidth: CGFloat = 9
 
     var body: some View {
-        let v = CGFloat(min(max(value, 0), 1))
         ZStack {
-            Circle().trim(from: 0, to: 0.75)
-                .stroke(Color.primary.opacity(0.09), style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(135))
-            Circle().trim(from: 0, to: 0.75 * max(v, 0.01))
-                .stroke((status ?? tint).gradient, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
-                .rotationEffect(.degrees(135))
+            ArcLayer(parts: [(Float(min(max(value, 0.01), 1)), status ?? tint)], lineWidth: lineWidth, sweep: 0.75, startAngle: 135,
+                     roundCaps: true)
             VStack(spacing: 0) {
                 Text(label).font(.system(size: 19, weight: .bold, design: .rounded)).monospacedDigit()
                 HStack(spacing: 2) {
@@ -249,8 +374,6 @@ struct ArcGauge: View {
                 .font(.system(size: 9.5, weight: .medium))
             }
         }
-        .padding(lineWidth / 2)
-        .animation(Motion.animation, value: Motion.bucket(Double(v)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(caption) \(label)")
     }
@@ -263,15 +386,7 @@ struct GlassMeter: View {
     var height: CGFloat = 7
 
     var body: some View {
-        let v = CGFloat(min(max(value, 0), 1))
-        ZStack(alignment: .leading) {
-            Capsule().fill(Color.primary.opacity(0.09))
-            // Scaled rather than resized: animating a frame relayouts the panel every frame.
-            Capsule().fill(LinearGradient(colors: [tint.opacity(0.75), tint], startPoint: .leading, endPoint: .trailing))
-                .scaleEffect(x: max(v, 0.02), y: 1, anchor: .leading)
-                .animation(Motion.animation, value: Motion.bucket(Double(v)))
-        }
-        .frame(height: height)
+        MeterLayer(value: value, tint: tint).frame(height: height)
     }
 }
 

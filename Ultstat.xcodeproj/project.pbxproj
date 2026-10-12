@@ -16,6 +16,7 @@
 		2CD1699B071B3E78484968C8 /* HelperClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDD4CD97B8C0248FF4C7944F /* HelperClient.swift */; };
 		319A9F75E96E02C0D75917DE /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D84EBE5B9961DB25679D343 /* StatusItemController.swift */; };
 		382D8E59608E2594D7FAD649 /* UltstatApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E44C980E0562D9E4D185BCC8 /* UltstatApp.swift */; };
+		3D61AFF8F9092EA972A5ECC6 /* LayerWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D3512A8E932B05051920654 /* LayerWidgets.swift */; };
 		3F90B58E302EA867D282C3BE /* ModuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10F51B6620A089591B306322 /* ModuleView.swift */; };
 		4B41AF19EA2CCE78F5D482C2 /* SettingsDashboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52CEC7C5422813CC62294F2D /* SettingsDashboard.swift */; };
 		4E0426DAAF3D36BDF2B84854 /* UltstatCore in Frameworks */ = {isa = PBXBuildFile; productRef = 0982CB0882891D9CC8A27FA9 /* UltstatCore */; };
@@ -82,6 +83,7 @@
 		6F7CDBE236D3A77C39C7A296 /* ChargeController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargeController.swift; sourceTree = "<group>"; };
 		74B02CD3FE49D7E5D4224588 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		87744FC79CE117DED43FC717 /* UltstatUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UltstatUITests.swift; sourceTree = "<group>"; };
+		8D3512A8E932B05051920654 /* LayerWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayerWidgets.swift; sourceTree = "<group>"; };
 		97BE555ED181593C415FCDFC /* HelpText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpText.swift; sourceTree = "<group>"; };
 		989C3F627B6161762D86694E /* DashboardPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPanel.swift; sourceTree = "<group>"; };
 		9D1BD360FF791863A3428125 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -219,6 +221,7 @@
 				9D1BD360FF791863A3428125 /* DashboardView.swift */,
 				9F0CA2217BC56A4337CAB142 /* Glass.swift */,
 				97BE555ED181593C415FCDFC /* HelpText.swift */,
+				8D3512A8E932B05051920654 /* LayerWidgets.swift */,
 				E6C9413E6978E89C5EBD21EE /* ModuleComponents.swift */,
 				10F51B6620A089591B306322 /* ModuleView.swift */,
 				52CEC7C5422813CC62294F2D /* SettingsDashboard.swift */,
@@ -416,6 +419,7 @@
 				D8039FDB48158F1D6A239FCD /* HelpText.swift in Sources */,
 				2CD1699B071B3E78484968C8 /* HelperClient.swift in Sources */,
 				574EDB69846F2CC597655A97 /* HelperProtocol.swift in Sources */,
+				3D61AFF8F9092EA972A5ECC6 /* LayerWidgets.swift in Sources */,
 				D00AAAFBE840914FE158239A /* ModuleComponents.swift in Sources */,
 				3F90B58E302EA867D282C3BE /* ModuleView.swift in Sources */,
 				93DCCA9D53D72A0A884393B5 /* MonitorHub.swift in Sources */,

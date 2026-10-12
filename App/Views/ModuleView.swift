@@ -723,20 +723,9 @@ struct CoreBars: View {
 
     var body: some View {
         VStack(spacing: 5) {
-            HStack(alignment: .bottom, spacing: 3) {
-                ForEach(Array(load.perCore.enumerated()), id: \.offset) { i, v in
-                    let perf = i < kinds.count && kinds[i] == .performance
-                    let tint = perf ? Theme.series1 : Theme.series2
-                    ZStack(alignment: .bottom) {
-                        Capsule().fill(Color.primary.opacity(0.07))
-                        // Scaled, not resized, so an animation never relayouts the panel.
-                        Capsule().fill(LinearGradient(colors: [tint.opacity(0.7), tint], startPoint: .bottom, endPoint: .top))
-                            .scaleEffect(x: 1, y: max(0.08, CGFloat(min(max(v, 0), 1))), anchor: .bottom)
-                    }
-                    .frame(height: 44)
-                }
-            }
-            .animation(Motion.animation, value: load.perCore.map { Motion.bucket(Double($0)) })
+            BarsLayer(values: load.perCore,
+                      colors: load.perCore.indices.map { $0 < kinds.count && kinds[$0] == .performance ? Theme.series1 : Theme.series2 })
+                .frame(height: 44)
             Legend(items: [(CPUTopology.performanceName, Theme.series1), (CPUTopology.efficiencyName, Theme.series2)])
         }
     }

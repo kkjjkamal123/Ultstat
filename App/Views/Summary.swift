@@ -51,7 +51,7 @@ struct SummaryGrid: View {
                     .minimumScaleFactor(0.7)
                 Text(sub ?? " ").font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)
                 if let history, history.count > 1 {
-                    Sparkline(values: Array(history.suffix(40)), maxValue: historyMax, tint: tint).frame(height: 14)
+                    SmoothChart(series: [(Array(history.suffix(40)), tint)], maxValue: historyMax, height: 14, compact: true)
                 } else {
                     Color.clear.frame(height: 14)
                 }

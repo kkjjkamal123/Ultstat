@@ -31,37 +31,6 @@ enum Theme {
     }
 }
 
-/// Minimal line chart. One `Canvas` draw per update; no per-point views or layout.
-struct Sparkline: View {
-    var values: [Float]
-    var maxValue: Float?
-    var tint: Color = Theme.series1
-    var filled = true
-
-    var body: some View {
-        Canvas { ctx, size in
-            guard values.count > 1 else { return }
-            let top = max(maxValue ?? values.max() ?? 1, 0.0001)
-            let step = size.width / CGFloat(values.count - 1)
-            var line = Path()
-            for (i, v) in values.enumerated() {
-                let p = CGPoint(x: CGFloat(i) * step, y: size.height * (1 - CGFloat(min(v / top, 1))))
-                if i == 0 { line.move(to: p) } else { line.addLine(to: p) }
-            }
-            var fill = line
-            fill.addLine(to: CGPoint(x: size.width, y: size.height))
-            fill.addLine(to: CGPoint(x: 0, y: size.height))
-            fill.closeSubpath()
-            if filled {
-                ctx.fill(fill, with: .linearGradient(Gradient(colors: [tint.opacity(0.22), tint.opacity(0.0)]),
-                                                     startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
-            }
-            ctx.stroke(line, with: .color(tint), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-        }
-        .accessibilityHidden(true)
-    }
-}
-
 /// Stacked segments (e.g. memory app / wired / compressed).
 struct StackedMeter: View {
     var parts: [(Float, Color)]
