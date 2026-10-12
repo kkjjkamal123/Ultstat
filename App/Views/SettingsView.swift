@@ -165,7 +165,7 @@ private struct MenuBarSettings: View {
             }
             Section {
                 Picker("Before each value", selection: $settings.stored.itemLabel) {
-                    Text("Name (CPU 8%)").tag(ItemLabel.name)
+                    Text("Name above value").tag(ItemLabel.name)
                     Text("Icon").tag(ItemLabel.icon)
                     Text("Nothing").tag(ItemLabel.none)
                 }

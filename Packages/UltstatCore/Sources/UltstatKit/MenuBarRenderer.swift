@@ -86,9 +86,10 @@ public enum MenuBarRenderer {
                                 histories: [MenuBarItem: [Float]] = [:]) -> [Segment] {
         items.compactMap { item -> Segment? in
             guard var seg = segment(item, readings: r, settings: settings, histories: histories) else { return nil }
-            switch seg.content {
-            case .labeled, .battery: break   // already captioned / self-explanatory
-            default: if settings.itemLabel == .name { seg.name = item.shortName }
+            // Names go above the value in small caps, like Stats ("CPU" over "7%"): narrower than inline.
+            if settings.itemLabel == .name, case .text(let value) = seg.content {
+                seg.symbol = nil
+                seg.content = .labeled(caption: item.shortName, value: value)
             }
             return seg
         }

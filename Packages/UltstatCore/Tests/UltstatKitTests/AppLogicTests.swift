@@ -46,12 +46,12 @@ import UltstatCore
         return r
     }
 
-    /// Values sit right after their name with no reserved slack ("CPU 8%" is narrower than "CPU 88%"),
-    /// and the default label is the plain name, not a symbol.
+    /// Values take only the room they need ("8%" is narrower than "88%"), and the default label is
+    /// the plain name drawn above the value, not a symbol.
     @Test func valuesAreTightAndNamed() {
         let s = AppSettings.Stored(items: [.cpu])
         let segs = MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.08), settings: s)
-        #expect(segs.first?.name == "CPU")
+        #expect(segs.first?.content == .labeled(caption: "CPU", value: "8%"))
         #expect(segs.first?.symbol == nil)
         let narrow = MenuBarRenderer.image(for: segs, scale: 2).size.width
         let wide = MenuBarRenderer.image(for: MenuBarRenderer.segments(for: [.cpu], readings: readings(cpu: 0.88), settings: s), scale: 2).size.width
@@ -64,7 +64,7 @@ import UltstatCore
 
     @Test func missingDataStillRenders() {
         let segs = MenuBarRenderer.segments(for: MenuBarItem.allCases, readings: Readings(), settings: .init())
-        #expect(segs.contains { $0.content == .text("–") })
+        #expect(segs.contains { $0.content == .labeled(caption: "CPU", value: "–") })
         #expect(MenuBarRenderer.cgImage(for: segs, scale: 2, tint: NSColor.white.cgColor) != nil)
     }
 
