@@ -23,8 +23,9 @@ final class HelperClient {
         switch service.status {
         case .enabled: .running
         case .requiresApproval: .needsApproval
-        case .notRegistered: .notInstalled
-        case .notFound: .unavailable("Helper is missing from the app bundle.")
+        // `.notFound` is also what a daemon that was never registered reports, so it means
+        // "not installed" here; a genuinely missing helper surfaces as a register() error.
+        case .notRegistered, .notFound: .notInstalled
         @unknown default: .unavailable("Unknown helper state.")
         }
     }

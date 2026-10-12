@@ -3,7 +3,11 @@ import UltstatCore
 import UltstatKit
 
 struct SettingsView: View {
-    @State private var tab = 0
+    @State private var tab: Int
+
+    init(initialTab: Int = 0) {
+        _tab = State(initialValue: initialTab)
+    }
 
     var body: some View {
         TabView(selection: $tab) {
@@ -57,22 +61,23 @@ private struct MenuBarSettings: View {
         Form {
             Section("Show in menu bar") {
                 ForEach(MenuBarItem.allCases) { item in
-                    HStack {
-                        Toggle(isOn: Binding(get: { model.settings.isEnabled(item) }, set: { _ in model.settings.toggle(item) })) {
-                            Label(item.title, systemImage: item.symbol)
-                        }
-                        .accessibilityIdentifier("settings.item.\(item.rawValue)")
+                    HStack(spacing: 12) {
+                        Label(item.title, systemImage: item.symbol)
+                        Spacer()
                         if [.cpu, .gpu, .memory].contains(item) {
-                            Spacer()
-                            Picker("", selection: Binding(get: { model.settings.style(for: item) },
-                                                          set: { model.settings.stored.styles[item] = $0 })) {
+                            Picker("Style", selection: Binding(get: { model.settings.style(for: item) },
+                                                               set: { model.settings.stored.styles[item] = $0 })) {
                                 Text("Text").tag(WidgetStyle.text)
                                 Text("Bar").tag(WidgetStyle.bar)
                             }
                             .labelsHidden()
-                            .frame(width: 90)
+                            .frame(width: 80)
                             .disabled(!model.settings.isEnabled(item))
                         }
+                        Toggle(item.title, isOn: Binding(get: { model.settings.isEnabled(item) }, set: { _ in model.settings.toggle(item) }))
+                            .labelsHidden()
+                            .toggleStyle(.switch)
+                            .accessibilityIdentifier("settings.item.\(item.rawValue)")
                     }
                 }
             }
