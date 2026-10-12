@@ -1,12 +1,75 @@
-<p align="center"><img src="docs/assets/icon.png" width="128" alt="Ultstat icon"></p>
+<div align="center">
 
-<h1 align="center">Ultstat</h1>
+<img src="docs/assets/icon.png" width="120" alt="Ultstat icon">
 
-<p align="center">A system monitor and battery charge limiter for Apple Silicon Macs, built to cost almost nothing while it runs.</p>
+# Ultstat
+
+**A system monitor and battery charge limiter for Apple silicon Macs, built to cost almost nothing while it runs.**
+
+[![Download](https://img.shields.io/badge/Download-Ultstat%200.1.0%20(.dmg)-2f6feb?style=for-the-badge&logo=apple)](../../releases/latest)
+![Tests](https://img.shields.io/badge/tests-96%2F96%20passing-brightgreen?style=for-the-badge)
+
+![Platform](https://img.shields.io/badge/macOS-26%2B-black?logo=apple)
+![Chip](https://img.shields.io/badge/Apple%20silicon-arm64-lightgrey)
+![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
+![Idle CPU](https://img.shields.io/badge/idle%20CPU-0.85%20ms%2Fs-blueviolet)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
+
+<br>
+
+<img src="docs/screenshots/menubar-dark.png" width="560" alt="Ultstat in the menu bar">
+
+<br><br>
+
+<img src="docs/screenshots/dashboard-dark.png" width="400" alt="Ultstat dashboard, dark">
+&nbsp;
+<img src="docs/screenshots/dashboard-light.png" width="400" alt="Ultstat dashboard, light">
+
+</div>
 
 ---
 
 Ultstat combines a menu-bar system monitor (CPU, GPU, memory, disk, network, temperatures, power, fans, processes) with full battery care: charge limit, sailing, discharge, heat protection, top-up and calibration. It's designed for the case where it runs all day in the background, so its own power draw is the first feature.
+
+## Download
+
+| | |
+|---|---|
+| **Ultstat 0.1.0 for macOS** | [`Ultstat-0.1.0.dmg`](../../releases/latest) from the Releases page (2.2 MB) |
+| **Requires** | macOS 26 or later on Apple silicon (developed on a MacBook Air M5, macOS 27.0.1) |
+| **Not available for** | Intel Macs, Windows or Linux. Ultstat talks to the Apple silicon SMC, IOReport and IOKit directly |
+
+1. Open the DMG and drag **Ultstat** to **Applications**.
+2. The build is ad-hoc signed, not notarized, so the first time **right-click → Open** (or *System Settings → Privacy & Security → Open Anyway*).
+3. If you use a menu-bar manager (Bartender, Ice, Latch …), ⌘-drag Ultstat out of its hidden section.
+4. Monitoring works straight away. For charge control, open **Settings → Charge Control → Install** and approve the helper with your password.
+
+## Screenshots
+
+Every module has its own panel. Click a reading in the menu bar to open it. These are rendered by the app itself
+(`-UltstatSnapshotDir`) from live readings on a MacBook Air M5:
+
+<p align="center">
+<img src="docs/screenshots/module-cpu.png" width="260" alt="CPU panel">
+<img src="docs/screenshots/module-battery.png" width="260" alt="Battery panel">
+<img src="docs/screenshots/module-memory.png" width="260" alt="Memory panel">
+</p>
+<p align="center">
+<img src="docs/screenshots/module-temperature.png" width="260" alt="Sensors panel">
+<img src="docs/screenshots/module-network.png" width="260" alt="Network panel">
+</p>
+
+**Menu bar settings.** Pick readings and styles, then drag them in the preview to rearrange; the menu bar follows on drop.
+
+<p align="center"><img src="docs/screenshots/settings-menu-bar.png" width="760" alt="Menu bar settings"></p>
+
+**Battery icon states:** on adapter, charging, Low Power Mode.
+
+<p align="center">
+<img src="docs/screenshots/battery-dark.png" height="40" alt="Battery on adapter">
+&nbsp;<img src="docs/screenshots/battery-dark-charging.png" height="40" alt="Battery charging">
+&nbsp;<img src="docs/screenshots/battery-dark-lowpower.png" height="40" alt="Battery in Low Power Mode">
+</p>
 
 ## Measured cost
 
@@ -64,6 +127,59 @@ Details, byte layouts and open questions are in [`docs/charging-control.md`](doc
 - Its interface is a few range-checked commands. Unlike AlDente's helper, it has no "write any SMC key" or "write any preference" call.
 - It restores normal charging on exit and uninstall. It never leaves the adapter disabled while unplugged, a property tested exhaustively across about 50,000 input combinations.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph App["Ultstat.app (user)"]
+        T["One coalesced timer<br/>stops when nothing is visible"] --> D{"Demand model<br/>which readings are shown?"}
+        D --> SM["Samplers<br/>libproc · sysctl · SMC · IOReport"]
+        B["IOKit battery notifications"] --> R
+        SM --> R["Readings bus<br/>ring buffers"]
+        R --> MB["Menu bar<br/>drawn into one CALayer"]
+        R --> P["SwiftUI panels<br/>exist only while open"]
+    end
+    subgraph Helper["UltstatHelper (root LaunchDaemon)"]
+        X["XPC<br/>code-signature checked"] --> CS["Charge state machine<br/>limit · sailing · heat · calibration<br/>keeps working while the app is quit"]
+        CS --> SMC["SMC keys CHTE / CHIE / CH0B…<br/>or macOS 27 native limiter"]
+    end
+    P -- "set limit, top up, discharge" --> X
+```
+
+## Proof
+
+**Power.** `powermetrics --samplers tasks`, 30 s, default menu bar, popover closed (raw numbers and method in
+[`PROGRESS.md`](PROGRESS.md)). Ultstat uses about 1/67th of the CPU time of Stats and 1/11th of AlDente:
+
+```mermaid
+xychart-beta
+    title "CPU time while idle in the menu bar (ms per second, lower is better)"
+    x-axis ["Ultstat", "AlDente 1.39.4", "Stats 3.0.20"]
+    y-axis "ms/s" 0 --> 60
+    bar [0.85, 9.6, 56.8]
+```
+
+**How the idle cost came down** across the build iterations:
+
+| Build | CPU ms/s | Wake-ups/s | Energy impact |
+|---|---:|---:|---:|
+| First build | 8.38 | 5.36 | 1.01 |
+| Cached symbols and attributes, rasterise once, fixed slots | 5.55 | 5.21 | 0.60 |
+| `CALayer` contents instead of `NSStatusBarButton.image` | 1.07 | 0.59 | 0.13 |
+| Current (demand-driven sampling, event-driven battery) | **0.85** | **0.56** | **0.08** |
+
+**Tests.** 96 of 96 pass on the 0.1.0 build: 61 for the core (samplers, scheduler, the charge state machine against
+a fake SMC) and 35 for the app logic (settings, menu-bar layout, battery time).
+
+```text
+$ cd Packages/UltstatCore && swift test
+✔ Test run with 35 tests in 10 suites passed after 0.142 seconds.
+✔ Test run with 61 tests in 19 suites passed after 1.489 seconds.
+```
+
+**Memory.** `tools/stress-popover.sh` opens and closes the popover 120 times: memory stays bounded at 44 MB. An earlier build grew by 0.75 MB per open
+(a glyph cache filled by animated number transitions); the stress test caught it and it is fixed.
+
 ## Requirements
 
 - Apple Silicon Mac
@@ -114,3 +230,7 @@ tools/                    icon renderer, stress script
 ## License
 
 Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+---
+
+Made by **Kamalesh VS** · [github.com/kkjjkamal123](https://github.com/kkjjkamal123) · [kkjj.me](https://kkjj.me)
