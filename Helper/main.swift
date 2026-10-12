@@ -64,7 +64,16 @@ final class HelperService: NSObject, NSXPCListenerDelegate, UltstatHelperProtoco
         if let team = signingInfo(of: Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]))?.team {
             return "anchor apple generic and identifier \"\(appID)\" and certificate leaf[subject.OU] = \"\(team)\""
         }
-        // Helper lives at Ultstat.app/Contents/MacOS/<helper>; the app is three levels up.
+        // Administrator-prompt installs run a root-owned copy and record the allowed app in a
+        // root-owned file (see InstallScript). Only trust that file if root owns it and nobody else can write it.
+        let reqPath = "/Library/Application Support/Ultstat/client-requirement"
+        if let attrs = try? FileManager.default.attributesOfItem(atPath: reqPath),
+           (attrs[.ownerAccountID] as? NSNumber)?.intValue == 0,
+           let perms = (attrs[.posixPermissions] as? NSNumber)?.intValue, perms & 0o022 == 0,
+           let req = try? String(contentsOfFile: reqPath, encoding: .utf8), !req.isEmpty {
+            return req.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        // SMAppService installs: helper lives at Ultstat.app/Contents/MacOS/<helper>; the app is three levels up.
         let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
         let app = exe.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         guard app.pathExtension == "app", let cdhash = signingInfo(of: app)?.cdhash else { return nil }

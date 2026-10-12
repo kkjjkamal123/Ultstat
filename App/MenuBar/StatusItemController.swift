@@ -56,7 +56,8 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     /// Redraws only when the formatted output or the menu-bar appearance changed.
     func render(force: Bool = false) {
         guard let button = item.button else { return }
-        var segs = MenuBarRenderer.segments(for: model.settings.stored.items, readings: model.readings, settings: model.settings.stored)
+        var segs = MenuBarRenderer.segments(for: model.settings.stored.items, readings: model.readings,
+                                            settings: model.settings.stored, histories: model.menuBarHistories())
         if segs.isEmpty { segs = [Segment(symbol: "gauge.with.dots.needle.33percent", content: .text(""), slot: "")] }
         let appearance = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua, .vibrantDark, .vibrantLight])
         guard force || segs != lastSegments || appearance != lastAppearance else { return }
@@ -86,6 +87,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
             case .text(let t): t
             case .stacked(let a, let b): "\(a) \(b)"
             case .bar(let v): MetricFormat.percent(v)
+            case .sparkline(let v): v.last.map(MetricFormat.percent) ?? ""
             }
         }.joined(separator: ", "))
     }

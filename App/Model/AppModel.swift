@@ -227,6 +227,21 @@ final class AppModel {
 
     // MARK: History for charts (read on demand by open views only)
 
+    /// Histories only for items drawn as sparklines, trimmed to what the menu bar shows.
+    func menuBarHistories() -> [MenuBarItem: [Float]] {
+        var out: [MenuBarItem: [Float]] = [:]
+        let n = MenuBarRenderer.sparklinePoints
+        for item in settings.stored.items where settings.style(for: item) == .sparkline {
+            switch item {
+            case .cpu: out[.cpu] = Array(hub.cpu.history.values.suffix(n))
+            case .gpu: out[.gpu] = Array((hub.gpu?.history.values ?? []).suffix(n))
+            case .memory: out[.memory] = Array(hub.memory.history.values.suffix(n))
+            default: break
+            }
+        }
+        return out
+    }
+
     var cpuHistory: [Float] { hub.cpu.history.values }
     var memoryHistory: [Float] { hub.memory.history.values }
     var gpuHistory: [Float] { hub.gpu?.history.values ?? [] }

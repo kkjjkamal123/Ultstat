@@ -1,5 +1,6 @@
 import Foundation
 import os
+import Security
 import ServiceManagement
 import UltstatCore
 import UltstatKit
@@ -42,12 +43,25 @@ final class HelperClient {
     }
 
     /// Fallback for builds without a signing identity, where `SMAppService` refuses to register a daemon.
-    /// Installs the LaunchDaemon through the standard administrator-password prompt (see InstallScript).
+    /// Copies the helper to a root-owned location via the administrator prompt (see InstallScript).
     func installWithAdministratorPrompt() throws {
         let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/\(InstallScript.label)").path
-        guard FileManager.default.isExecutableFile(atPath: helper) else { throw HelperInstallError.missingHelper }
-        let plist = try InstallScript.launchdPlist(helperPath: helper)
-        try Self.runAsAdministrator(InstallScript.installShell(plist: plist))
+        guard FileManager.default.isExecutableFile(atPath: helper),
+              let helperHash = Self.cdhash(of: URL(fileURLWithPath: helper)),
+              let appHash = Self.cdhash(of: Bundle.main.bundleURL) else { throw HelperInstallError.missingHelper }
+        let requirement = "identifier \"io.github.kkjjkamal23.Ultstat\" and cdhash H\"\(appHash)\""
+        let shell = InstallScript.installShell(sourceHelper: helper, expectedCDHash: helperHash,
+                                               clientRequirement: requirement, plist: try InstallScript.launchdPlist())
+        try Self.runAsAdministrator(shell)
+    }
+
+    static func cdhash(of url: URL) -> String? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(url as CFURL, [], &code) == errSecSuccess, let code else { return nil }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let data = (info as? [String: Any])?[kSecCodeInfoUnique as String] as? Data else { return nil }
+        return data.map { String(format: "%02x", $0) }.joined()
     }
 
     /// Replaces the registered daemon with the one in this app bundle.

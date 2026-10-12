@@ -26,6 +26,8 @@ public struct Segment: Equatable, Sendable {
         case text(String)
         case stacked(top: String, bottom: String)
         case bar(Float)
+        /// Recent history, 0...1, oldest first.
+        case sparkline([Float])
     }
 
     public var symbol: String?
@@ -61,19 +63,27 @@ public enum MenuBarRenderer {
     private static var symbols: [String: NSImage] = [:]
     private static var slotWidths: [String: CGFloat] = [:]
 
-    public static func segments(for items: [MenuBarItem], readings r: Readings, settings: AppSettings.Stored) -> [Segment] {
+    /// Points kept for a menu-bar sparkline (one per tick).
+    public static let sparklinePoints = 24
+    private static let sparklineWidth: CGFloat = 28
+
+    public static func segments(for items: [MenuBarItem], readings r: Readings, settings: AppSettings.Stored,
+                                histories: [MenuBarItem: [Float]] = [:]) -> [Segment] {
         items.compactMap { item -> Segment? in
             let icon = settings.showIcons ? item.symbol : nil
             let style = settings.styles[item] ?? .text
             switch item {
             case .cpu:
                 guard let c = r.cpu else { return Segment(symbol: icon, content: .text("–"), slot: style == .bar ? "" : "88%") }
+                if style == .sparkline { return Segment(symbol: icon, content: .sparkline(histories[.cpu] ?? [c.total])) }
                 return Segment(symbol: icon, content: style == .bar ? .bar(c.total) : .text(MetricFormat.percent(c.total)), slot: "88%")
             case .gpu:
                 guard let g = r.gpu else { return nil }
+                if style == .sparkline { return Segment(symbol: icon, content: .sparkline(histories[.gpu] ?? [g.utilization])) }
                 return Segment(symbol: icon, content: style == .bar ? .bar(g.utilization) : .text(MetricFormat.percent(g.utilization)), slot: "88%")
             case .memory:
                 guard let m = r.memory else { return Segment(symbol: icon, content: .text("–"), slot: style == .bar ? "" : "88%") }
+                if style == .sparkline { return Segment(symbol: icon, content: .sparkline(histories[.memory] ?? [m.usedFraction])) }
                 return Segment(symbol: icon, content: style == .bar ? .bar(m.usedFraction) : .text(MetricFormat.percent(m.usedFraction)), slot: "88%")
             case .network:
                 guard let n = r.network else { return Segment(symbol: nil, content: .stacked(top: "↑ –", bottom: "↓ –"), slot: "↑ 888K") }
@@ -173,6 +183,7 @@ public enum MenuBarRenderer {
             max(textWidth(seg.slot, small: true), (a as NSString).size(withAttributes: smallAttrs).width,
                 (b as NSString).size(withAttributes: smallAttrs).width)
         case .bar: 6
+        case .sparkline: sparklineWidth
         }
     }
 
@@ -205,7 +216,36 @@ public enum MenuBarRenderer {
             let fillH = track.height * CGFloat(min(max(v, 0), 1))
             NSColor.black.setFill()
             NSBezierPath(roundedRect: NSRect(x: track.minX, y: track.minY, width: track.width, height: fillH), xRadius: 2, yRadius: 2).fill()
+        case .sparkline(let values):
+            drawSparkline(values, in: NSRect(x: x, y: 3, width: sparklineWidth, height: height - 6))
         }
+    }
+
+    private static func drawSparkline(_ values: [Float], in r: NSRect) {
+        // Faint track so the widget is visible even when the values hug the baseline.
+        NSColor.black.withAlphaComponent(0.15).setFill()
+        NSBezierPath(roundedRect: r, xRadius: 2.5, yRadius: 2.5).fill()
+        let r = r.insetBy(dx: 1.5, dy: 1.5)
+        var pts = Array(values.suffix(sparklinePoints))
+        guard let last = pts.last else { return }
+        if pts.count == 1 { pts = [last, last] }   // right after launch: a flat line at the current level
+        let step = r.width / CGFloat(sparklinePoints - 1)
+        let x0 = r.maxX - step * CGFloat(pts.count - 1)   // newest sample on the right edge
+        let line = NSBezierPath()
+        for (i, v) in pts.enumerated() {
+            let p = NSPoint(x: x0 + CGFloat(i) * step, y: r.minY + r.height * CGFloat(min(max(v, 0), 1)))
+            if i == 0 { line.move(to: p) } else { line.line(to: p) }
+        }
+        let area = line.copy() as! NSBezierPath
+        area.line(to: NSPoint(x: r.maxX, y: r.minY))
+        area.line(to: NSPoint(x: x0, y: r.minY))
+        area.close()
+        NSColor.black.withAlphaComponent(0.3).setFill()
+        area.fill()
+        NSColor.black.setStroke()
+        line.lineWidth = 1.2
+        line.lineJoinStyle = .round
+        line.stroke()
     }
 
     public static func accessibilityText(_ seg: Segment) -> String {
@@ -213,6 +253,7 @@ public enum MenuBarRenderer {
         case .text(let t): t
         case .stacked(let a, let b): "\(a) \(b)"
         case .bar(let v): MetricFormat.percent(v)
+        case .sparkline(let v): v.last.map(MetricFormat.percent) ?? ""
         }
     }
 }

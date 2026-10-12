@@ -70,9 +70,10 @@ private struct MenuBarSettings: View {
                                                                set: { model.settings.stored.styles[item] = $0 })) {
                                 Text("Text").tag(WidgetStyle.text)
                                 Text("Bar").tag(WidgetStyle.bar)
+                                Text("Graph").tag(WidgetStyle.sparkline)
                             }
                             .labelsHidden()
-                            .frame(width: 80)
+                            .frame(width: 90)
                             .disabled(!model.settings.isEnabled(item))
                         }
                         Toggle(item.title, isOn: Binding(get: { model.settings.isEnabled(item) }, set: { _ in model.settings.toggle(item) }))

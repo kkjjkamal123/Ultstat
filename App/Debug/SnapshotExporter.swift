@@ -21,7 +21,8 @@ enum SnapshotExporter {
 
     static func export(model: AppModel, to dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let segs = MenuBarRenderer.segments(for: model.settings.stored.items, readings: model.readings, settings: model.settings.stored)
+        let segs = MenuBarRenderer.segments(for: model.settings.stored.items, readings: model.readings,
+                                            settings: model.settings.stored, histories: model.menuBarHistories())
         for (name, appearance) in [("menubar-dark", NSAppearance.Name.darkAqua), ("menubar-light", .aqua)] {
             writeMenuBar(segments: segs, appearance: appearance, to: dir.appendingPathComponent("\(name).png"))
         }

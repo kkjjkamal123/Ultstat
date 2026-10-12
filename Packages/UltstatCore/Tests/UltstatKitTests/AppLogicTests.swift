@@ -147,3 +147,31 @@ import UltstatCore
         #expect(last.systemPower == 3)
     }
 }
+
+@MainActor
+@Suite struct SparklineWidgetTests {
+    @Test func sparklineUsesHistoryAndFixedWidth() throws {
+        var s = AppSettings.Stored(items: [.cpu])
+        s.styles[.cpu] = .sparkline
+        var r = Readings()
+        r.cpu = CPULoad(total: 0.5, user: 0.5, system: 0, perCore: [], performance: nil, efficiency: nil)
+        let short = MenuBarRenderer.segments(for: [.cpu], readings: r, settings: s, histories: [.cpu: [0.1, 0.9]])
+        let long = MenuBarRenderer.segments(for: [.cpu], readings: r, settings: s, histories: [.cpu: Array(repeating: 0.3, count: 100)])
+        #expect(short.first?.content == .sparkline([0.1, 0.9]))
+        let w1 = MenuBarRenderer.image(for: short, scale: 2).size.width
+        let w2 = MenuBarRenderer.image(for: long, scale: 2).size.width
+        #expect(w1 == w2, "graph width must not depend on history length")
+        #expect(MenuBarRenderer.cgImage(for: long, scale: 2, tint: NSColor.white.cgColor) != nil)
+    }
+}
+
+@MainActor
+@Suite struct SparklineEdgeTests {
+    /// A single point must still draw (flat line), never an empty slot.
+    @Test func singlePointDraws() throws {
+        let seg = Segment(symbol: nil, content: .sparkline([0.5]))
+        let (img, _) = try #require(MenuBarRenderer.cgImage(for: [seg], scale: 2, tint: NSColor.white.cgColor))
+        let data = try #require(img.dataProvider?.data as Data?)
+        #expect(data.contains { $0 != 0 }, "image must not be fully transparent")
+    }
+}

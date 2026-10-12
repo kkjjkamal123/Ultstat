@@ -100,6 +100,16 @@ public final class AppSettings {
             overrideItems = override == "none" ? [] : override.split(separator: ",").compactMap { MenuBarItem(rawValue: String($0)) }
             stored.items = overrideItems!
         }
+        // `-UltstatStyles cpu:sparkline,memory:bar` overrides widget styles for this launch only.
+        if let styles = defaults.string(forKey: "UltstatStyles") {
+            overrideItems = overrideItems ?? stored.items
+            for pair in styles.split(separator: ",") {
+                let kv = pair.split(separator: ":").map(String.init)
+                if kv.count == 2, let item = MenuBarItem(rawValue: kv[0]), let style = WidgetStyle(rawValue: kv[1]) {
+                    stored.styles[item] = style
+                }
+            }
+        }
     }
 
     @ObservationIgnored private var overrideItems: [MenuBarItem]?
