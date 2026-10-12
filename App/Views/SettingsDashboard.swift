@@ -121,12 +121,8 @@ struct SettingsDashboard: View {
             HStack(alignment: .bottom) {
                 BigNumber(caption: "Battery level", value: "\(b.percent) %")
                 Spacer()
-                if b.isCharging {
-                    BigNumber(caption: "Time to full", value: BatteryTime.minutes(b).map { BatteryTime.format(minutes: $0.minutes) } ?? "--",
-                              symbol: "clock")
-                } else {
-                    BigNumber(caption: "Time remaining", value: remaining(b, r), symbol: "clock")
-                }
+                let time = model.batteryTimeDisplay(b)
+                BigNumber(caption: time.caption, value: time.value, symbol: time.symbol)
             }
             SmoothChart(series: [(model.batteryLevelHistory, Theme.aqua)], maxValue: 100,
                         reference: model.settings.stored.chargeControlEnabled ? Float(model.settings.stored.chargePolicy.limit) : nil,
@@ -195,7 +191,8 @@ struct SettingsDashboard: View {
                 BigNumber(caption: "Power consumption", value: r.systemPower.map(formatWatts) ?? "–", symbol: "bolt")
                 Spacer()
                 if let b = r.battery {
-                    BigNumber(caption: "Time remaining", value: remaining(b, r), symbol: "clock")
+                    let time = model.batteryTimeDisplay(b)
+                    BigNumber(caption: time.caption, value: time.value, symbol: time.symbol)
                 }
             }
             SmoothChart(series: [(model.powerHistory, Theme.yellow)], maxValue: nil, height: 110)
@@ -207,12 +204,6 @@ struct SettingsDashboard: View {
             BigNumber(caption: "\(title) usage", value: value ?? "–", symbol: symbol)
             SmoothChart(series: [(history, tint)], maxValue: 1, height: 110)
         }
-    }
-
-    /// Battery time left: macOS's estimate on battery, or how long it would last at the current load.
-    private func remaining(_ b: BatterySnapshot, _ r: Readings) -> String {
-        if let (m, toFull) = BatteryTime.minutes(b), !toFull { return BatteryTime.format(minutes: m) }
-        return BatteryTime.minutesAtCurrentLoad(b, systemWatts: r.systemPower).map(BatteryTime.format(minutes:)) ?? "--"
     }
 }
 

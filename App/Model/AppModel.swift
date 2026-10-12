@@ -380,6 +380,21 @@ final class AppModel {
         updatePolicy { $0.calibration = $0.calibration == nil ? .discharging : nil }
     }
 
+    /// What the battery-time readout shows. Plugged in and not charging (held at a limit, or full),
+    /// there is no time to show: the battery isn't being used, so the state is shown instead.
+    func batteryTimeDisplay(_ b: BatterySnapshot) -> (caption: String, value: String, symbol: String) {
+        if let (m, toFull) = BatteryTime.minutes(b) {
+            return (toFull ? "Time to full" : "Time remaining", BatteryTime.format(minutes: m), "clock")
+        }
+        if b.isCharging { return ("Time to full", "Calculating…", "clock") }
+        if b.externalConnected {
+            if b.fullyCharged { return ("Charging", "Charged", "checkmark.circle") }
+            let limit = settings.stored.chargePolicy.limit
+            return ("Charging", settings.stored.chargeControlEnabled ? "Paused at \(limit) %" : "Not charging", "pause.circle")
+        }
+        return ("Time remaining", "Calculating…", "clock")
+    }
+
     /// One line describing calibration progress, or nil when it isn't running.
     func calibrationProgress(percent: Int?) -> String? {
         guard let phase = settings.stored.chargePolicy.calibration else { return nil }

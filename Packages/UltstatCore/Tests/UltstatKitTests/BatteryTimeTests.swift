@@ -49,14 +49,4 @@ import UltstatCore
         #expect(BatteryTime.compact(snap(plugged: true, charging: false, amps: 0)) == "--")
         #expect(BatteryTime.compact(snap(plugged: false, charging: false, amps: -900, toEmpty: 65)) == "1:05")
     }
-
-    @Test func pluggedNotChargingEstimatesAtCurrentLoad() {
-        // 3000 mAh × 12 V = 36 Wh; at 4 W that lasts 9 h.
-        let held = snap(plugged: true, charging: false, amps: 0)
-        #expect(BatteryTime.minutesAtCurrentLoad(held, systemWatts: 4) == 540)
-        #expect(BatteryTime.compact(held, systemWatts: 4) == "9:00")
-        #expect(BatteryTime.compact(held, systemWatts: nil) == "--", "no load figure: no estimate")
-        #expect(BatteryTime.minutesAtCurrentLoad(snap(plugged: true, charging: true, amps: 2000), systemWatts: 4) == nil)
-        #expect(BatteryTime.minutesAtCurrentLoad(snap(plugged: false, charging: false, amps: -500), systemWatts: 4) == nil)
-    }
 }

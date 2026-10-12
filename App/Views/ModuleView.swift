@@ -497,7 +497,8 @@ private struct BatteryModule: View {
                     BigNumber(caption: "Battery level", value: "\(b.percent) %")
                     HelpBadge(Help.batteryLevelChart)
                     Spacer()
-                    BigNumber(caption: "Time remaining", value: timeRemaining(b), symbol: "clock")
+                    let time = model.batteryTimeDisplay(b)
+                    BigNumber(caption: time.caption, value: time.value, symbol: time.symbol)
                     HelpBadge(Help.timeRemaining)
                 }
                 SmoothChart(series: [(model.batteryLevelHistory, Theme.aqua)], maxValue: 100,
@@ -556,11 +557,6 @@ private struct BatteryModule: View {
         return m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m) min"
     }
 
-    private func timeRemaining(_ b: BatterySnapshot) -> String {
-        if let (m, _) = BatteryTime.minutes(b) { return BatteryTime.format(minutes: m) }
-        if let m = BatteryTime.minutesAtCurrentLoad(b, systemWatts: r.systemPower) { return BatteryTime.format(minutes: m) }
-        return "--"
-    }
 
     private func hero(_ b: BatterySnapshot) -> some View {
         HStack(spacing: 14) {

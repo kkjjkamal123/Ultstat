@@ -184,8 +184,8 @@ enum Help {
         Battery level over the last 12 hours, one point a minute. The dashed line is your charge limit.
         """
     static let timeRemaining = """
-        On battery: macOS's estimate. Plugged in and not charging: how long the battery would last \
-        at the current power draw.
+        On battery: how long until empty (macOS's estimate). Charging: how long until full. Plugged in \
+        and held at a limit, the battery isn't being used, so its state is shown instead of a time.
         """
     static let processes = """
         Apps using the most of this resource right now. Power is the energy macOS measured for each app.
