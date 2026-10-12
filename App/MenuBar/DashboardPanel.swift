@@ -1,4 +1,5 @@
 import AppKit
+import os
 import SwiftUI
 
 /// The dashboard window. A borderless panel rather than an `NSPopover`: popovers anchor to the
@@ -18,6 +19,8 @@ final class DashboardPanel: NSPanel {
     private let panelWidth: CGFloat
     private let fitsContent: Bool
     private var host = NSView()
+    /// Owns the SwiftUI content; asked for the content's natural height when the panel is shown.
+    private var controller: NSHostingController<AnyView>?
     static let cornerRadius: CGFloat = 22
 
     init(rootView: some View, width: CGFloat = DashboardPanel.size.width, fitsContent: Bool = false) {
@@ -35,8 +38,10 @@ final class DashboardPanel: NSPanel {
         hidesOnDeactivate = false
         isReleasedWhenClosed = false
         animationBehavior = .utilityWindow
-        let host = NSHostingView(rootView: rootView)
-        host.sizingOptions = []
+        let controller = NSHostingController(rootView: AnyView(rootView))
+        controller.sizingOptions = []
+        self.controller = controller
+        let host = controller.view
         self.host = host
         // macOS 26 Liquid Glass behind everything the panel shows.
         let glass = NSGlassEffectView()
@@ -46,16 +51,10 @@ final class DashboardPanel: NSPanel {
         glass.tintColor = NSColor.windowBackgroundColor.withAlphaComponent(0.55)
         glass.contentView = host
         contentView = glass
-        // Panels are sized once, when shown: resizing an open panel left SwiftUI drawing the old
-        // layout offset (header clipped). Content that grows later scrolls (ModuleView's ViewThatFits),
-        // and late-arriving rows have reserved space, so the first size is the final one.
-        host.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            host.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
-            host.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
-            host.topAnchor.constraint(equalTo: glass.topAnchor),
-            host.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
-        ])
+        // Panels are sized once, when shown (resizing an open one drew the old layout offset);
+        // late-arriving rows have reserved space, and content that outgrows the panel scrolls.
+        host.frame = glass.bounds
+        host.autoresizingMask = [.width, .height]
     }
 
     override var canBecomeKey: Bool { true }
@@ -66,8 +65,14 @@ final class DashboardPanel: NSPanel {
         let visible = screen.visibleFrame
         let margin: CGFloat = 8
         // Module panels size to their content (like Stats); the summary dashboard uses its fixed size.
-        let fitting = host.fittingSize.height
+        // Apply pending SwiftUI updates (the readings that just arrived) before measuring.
+        host.needsLayout = true
+        host.layoutSubtreeIfNeeded()
+        // The content's natural height at the panel's width (fittingSize is 0 inside the glass view).
+        let fitting = controller?.sizeThatFits(in: CGSize(width: panelWidth, height: 10_000)).height ?? 0
         let wanted = fitsContent && fitting > 100 ? fitting : Self.size.height
+        Logger(subsystem: "io.github.kkjjkamal23.Ultstat", category: "panel")
+            .notice("panel fit content=\(fitting, format: .fixed(precision: 0)) height=\(wanted, format: .fixed(precision: 0))")
         let height = min(wanted, visible.height - margin * 2)
         let width = panelWidth
         // An anchor that is off-screen or zero-sized (item hidden by a menu-bar manager) falls back

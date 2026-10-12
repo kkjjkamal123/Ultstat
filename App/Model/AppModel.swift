@@ -169,9 +169,13 @@ final class AppModel {
     /// sampling, panel readings and helper power run only while this is above zero.
     @ObservationIgnored private var detailViewers = 0
 
-    func popoverOpened() {
+    /// `ready` runs once the panel's first detailed readings are in, so it can be measured complete.
+    func popoverOpened(ready: (@MainActor () -> Void)? = nil) {
         detailViewers += 1
-        guard detailViewers == 1 else { return }
+        guard detailViewers == 1 else {
+            ready?()
+            return
+        }
         panelReadings = readings
         if connectivityMonitor == nil {
             connectivityMonitor = ConnectivityMonitor { [weak self] s in
@@ -179,7 +183,10 @@ final class AppModel {
             }
         }
         popoverOpen = true
-        hub.setDetailVisible(true)
+        hub.setDetailVisible(true) { [weak self] in
+            if let self { self.panelReadings = self.readings }
+            ready?()
+        }
         Task { await refreshHelper() }
         startHelperPower()
     }
@@ -248,8 +255,8 @@ final class AppModel {
         let p = fullPanel ?? DashboardPanel(rootView: DashboardView().environment(self))
         fullPanel = p
         p.onClose = { [weak self] in self?.popoverClosed() }
-        popoverOpened()
-        p.show(below: statusItems.first?.anchorRect)
+        let anchor = statusItems.first?.anchorRect
+        popoverOpened { p.show(below: anchor) }
     }
 
     /// Errors from General settings (launch at login), shown next to the control that failed.

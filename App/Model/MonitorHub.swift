@@ -79,8 +79,12 @@ final class MonitorHub {
         updateSensorGroups()
     }
 
-    func setDetailVisible(_ visible: Bool) {
-        guard visible != detailVisible else { return }
+    /// `ready` runs on the main thread once the first detailed readings (every sensor) are published.
+    func setDetailVisible(_ visible: Bool, ready: (@Sendable @MainActor () -> Void)? = nil) {
+        guard visible != detailVisible else {
+            ready?()
+            return
+        }
         detailVisible = visible
         cpu.setPerCore(visible)
         if visible {
@@ -96,7 +100,11 @@ final class MonitorHub {
         updateSensorGroups()
         // Newly enabled sensor groups are swept completely on their next sample; take it now so a
         // panel opens with every temperature instead of filling in over the next few ticks.
-        if visible, let sensors { scheduler.sampleSoon(sensors) }
+        if visible, let sensors {
+            scheduler.sampleSoon(sensors, then: ready)
+        } else {
+            ready?()
+        }
     }
 
     /// Rebuilds the accessory sampler when the Bluetooth (earbuds) option changes.

@@ -96,10 +96,12 @@ public final class Scheduler: Sendable {
 
     /// Samples `sampler` once, right away, on the scheduler queue (e.g. when a panel opens and
     /// should not wait for the next tick).
-    public func sampleSoon(_ sampler: any Sampler) {
+    public func sampleSoon(_ sampler: any Sampler, then done: (@Sendable @MainActor () -> Void)? = nil) {
         queue.async { [weak self] in
             guard let self else { return }
             sampler.sample(tick: self.state.withLock { $0.tick })
+            // Published readings are queued to the main thread from inside sample(), so this runs after them.
+            if let done { DispatchQueue.main.async { done() } }
         }
     }
 

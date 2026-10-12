@@ -33,6 +33,7 @@ final class StatusItemController: NSObject {
     private var appearanceObservation: NSKeyValueObservation?
     private var lastWidth: CGFloat = 0
     private var powerStateObserver: (any NSObjectProtocol)?
+    private var opening = false
 
     init(model: AppModel, metrics: [MenuBarItem], autosaveName: String) {
         self.model = model
@@ -232,6 +233,9 @@ final class StatusItemController: NSObject {
     /// Opens the panel for `requested` (default: the first metric, or All metrics when `showAll`),
     /// or closes it if it is open.
     func togglePopover(_ requested: MenuBarItem? = nil, showAll: Bool = false) {
+        // A panel is waiting for its first readings (a few ms): a second click must not open another
+        // one, or detailed sampling would stay on after it closes.
+        guard !opening else { return }
         let target = showAll ? nil : requested ?? metrics.first
         let key = target?.rawValue ?? "all"
         if let open = panels.first(where: { $0.value.isVisible }) {
@@ -248,9 +252,14 @@ final class StatusItemController: NSObject {
         let p = panels[key] ?? makePanel(target)
         p.onClose = { [weak self] in self?.dashboardClosed() }
         panels[key] = p
-        model.popoverOpened()
         item.button?.highlight(true)
-        p.show(below: anchorRect(for: target))
+        let anchor = anchorRect(for: target)
+        // Shown once every sensor has been read (a few ms), so the panel is measured with all its rows.
+        opening = true
+        model.popoverOpened { [weak self] in
+            self?.opening = false
+            p.show(below: anchor)
+        }
         log.notice("dashboard open took \(Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - t0) / 1e6, format: .fixed(precision: 1)) ms")
     }
 
