@@ -1,0 +1,36 @@
+included:
+  - App
+  - Helper
+  - Shared
+  - Packages/UltstatCore/Sources
+  - Packages/UltstatCore/Tests
+excluded:
+  - Packages/UltstatCore/.build
+  - build
+  - reference
+disabled_rules:
+  - identifier_name          # SMC keys, OSKit constants and short math names are clearer as-is
+  - type_name
+  - nesting
+  - todo
+  - function_body_length     # long but linear samplers read better unsplit
+  - type_body_length
+  - file_length
+  - cyclomatic_complexity
+  - large_tuple
+  - force_unwrapping
+  - trailing_comma           # trailing commas are the project style
+  - optional_data_string_conversion  # String(decoding:) is deliberately non-failable for kernel strings
+opt_in_rules:
+  - empty_count
+  - first_where
+  - contains_over_first_not_nil
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - weak_delegate
+line_length:
+  warning: 160
+  error: 200
+  ignores_comments: true
+analyzer_rules:
+  - unused_import

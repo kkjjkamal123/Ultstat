@@ -182,6 +182,14 @@ struct DashboardView: View {
         }
     }
 
+    private func sensorLabel(_ g: SensorGroup) -> String {
+        switch g {
+        case .cpuPerformance: "CPU \(CPUTopology.performanceName)"
+        case .cpuEfficiency: "CPU \(CPUTopology.efficiencyName)"
+        default: g.displayName
+        }
+    }
+
     private func sensorsCard(_ r: Readings) -> some View {
         let unit = model.settings.stored.temperatureUnit
         let hottest = r.sensors.values.map(\.max).max() ?? 0
@@ -190,7 +198,7 @@ struct DashboardView: View {
             Sparkline(values: model.temperatureHistory(.cpuPerformance), maxValue: 110).frame(height: 26)
             ForEach(r.sensors.keys.sorted(), id: \.self) { g in
                 if let v = r.sensors[g] {
-                    StatRow(label: g == .cpuPerformance ? "CPU \(CPUTopology.performanceName)" : g == .cpuEfficiency ? "CPU \(CPUTopology.efficiencyName)" : g.displayName,
+                    StatRow(label: sensorLabel(g),
                             value: "\(unit.format(v.max))  avg \(unit.format(v.average))")
                 }
             }
@@ -352,13 +360,18 @@ struct ProcessesCard: View {
         var id: String { rawValue }
     }
 
-    var body: some View {
-        let _ = model.readings.processes   // refresh with each tick
-        let rows: [ProcessUsage] = switch order {
+    /// Reading `readings.processes` subscribes this view to every tick; the orderings come from the sampler.
+    private var rows: [ProcessUsage] {
+        _ = model.readings.processes
+        return switch order {
         case .cpu: model.hub.processes.topByCPU
         case .memory: model.hub.processes.topByMemory
         case .power: model.hub.processes.topByPower
         }
+    }
+
+    var body: some View {
+        let rows = rows
         MetricCard(title: "Processes", symbol: "list.bullet.rectangle", value: "") {
             Picker("Order", selection: $order) {
                 ForEach(Order.allCases) { Text($0.rawValue).tag($0) }
@@ -384,7 +397,8 @@ struct ProcessesCard: View {
         switch order {
         case .cpu: String(format: "%.1f%%", p.cpu * 100)
         case .memory: ByteFormat.size(p.memory)
-        case .power: p.watts < 0.1 ? String(format: "%.0f mW", p.watts * 1000) : String(format: "%.2f W", p.watts)
+        case .power:
+            if p.watts < 0.1 { String(format: "%.0f mW", p.watts * 1000) } else { String(format: "%.2f W", p.watts) }
         }
     }
 }

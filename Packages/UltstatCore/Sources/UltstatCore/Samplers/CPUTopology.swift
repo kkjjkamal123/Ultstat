@@ -72,4 +72,3 @@ func sysctlInt(_ name: String) -> Int? {
     guard sysctlbyname(name, &value, &size, nil, 0) == 0 else { return nil }
     return Int(value)
 }
-

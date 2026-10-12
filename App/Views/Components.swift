@@ -25,7 +25,7 @@ enum Theme {
 /// Minimal line chart. One `Canvas` draw per update; no per-point views or layout.
 struct Sparkline: View {
     var values: [Float]
-    var maxValue: Float? = nil
+    var maxValue: Float?
     var tint: Color = Theme.series1
     var filled = true
 
@@ -98,8 +98,8 @@ struct MetricCard<Content: View>: View {
     var symbol: String
     var value: String
     /// Identity mark shown beside the title. Text never takes the series colour.
-    var tint: Color? = nil
-    var status: Color? = nil
+    var tint: Color?
+    var status: Color?
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -120,7 +120,7 @@ struct MetricCard<Content: View>: View {
                 Text(value)
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    
+
                     .foregroundStyle(.primary)
             }
             content

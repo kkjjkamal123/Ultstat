@@ -182,7 +182,7 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         guard let originals else { return }   // never touched the domain
-        for key in Self.managedKeys { prefs.set(key, originals[key] ?? nil, domain: Self.domain) }
+        for key in Self.managedKeys { prefs.set(key, originals[key].flatMap { $0 }, domain: Self.domain) }
         try commit()
         self.originals = nil
         appliedTarget = nil

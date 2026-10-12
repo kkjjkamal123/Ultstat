@@ -4,6 +4,7 @@ public struct RingBuffer: Sendable, Equatable {
     @usableFromInline var storage: [Float]
     @usableFromInline var head = 0          // index of the next write
     public private(set) var count = 0
+    public var isEmpty: Bool { count < 1 }
 
     public init(capacity: Int) {
         precondition(capacity > 0, "RingBuffer capacity must be positive")
@@ -18,7 +19,7 @@ public struct RingBuffer: Sendable, Equatable {
     }
 
     public var last: Float? {
-        guard count > 0 else { return nil }
+        guard !isEmpty else { return nil }
         return storage[head == 0 ? capacity - 1 : head - 1]
     }
 
@@ -40,7 +41,7 @@ public struct RingBuffer: Sendable, Equatable {
     }
 
     public var max: Float? {
-        guard count > 0 else { return nil }
+        guard !isEmpty else { return nil }
         var m = -Float.infinity
         forEach { if $0 > m { m = $0 } }
         return m

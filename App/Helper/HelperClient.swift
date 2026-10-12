@@ -55,7 +55,7 @@ final class HelperClient {
 
     func status() async -> ChargeStatus? {
         let data: Data?? = await call { proxy, done in proxy.status { done($0) } }
-        guard let d = data ?? nil else { return nil }
+        guard let d = data.flatMap({ $0 }) else { return nil }
         return try? PropertyListDecoder().decode(ChargeStatus.self, from: d)
     }
 

@@ -1,0 +1,12 @@
+Ultstat
+Copyright 2026 kkjjkamal23
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Ultstat is an independent, clean-room implementation. Its design was informed
+by studying the behaviour of:
+  - Stats (https://github.com/exelban/stats), Copyright (c) 2019 Serhiy Mytrovtsiy,
+    MIT License. No Stats source code is included in this repository.
+  - AlDente (https://apphousekitchen.com). Charge-control behaviour was
+    documented from the shipping app for interoperability
+    (see docs/charging-control.md). No AlDente code is included.

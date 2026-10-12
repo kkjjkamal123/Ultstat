@@ -54,14 +54,16 @@ let probe = CPUSampler(topology: topo)
 probe.sample(tick: 0)
 Thread.sleep(forTimeInterval: 0.5)
 probe.sample(tick: 0)
-print(String(format: "  probe totals-only after 0.5s: total %.1f%% user %.1f%% sys %.1f%%", probe.latest.total * 100, probe.latest.user * 100, probe.latest.system * 100))
+print(String(format: "  probe totals-only after 0.5s: total %.1f%% user %.1f%% sys %.1f%%",
+    probe.latest.total * 100, probe.latest.user * 100, probe.latest.system * 100))
 let probe2 = CPUSampler(topology: topo)
 probe2.setPerCore(true)
 probe2.sample(tick: 0)
 Thread.sleep(forTimeInterval: 0.5)
 probe2.sample(tick: 0)
 let p2 = probe2.latest
-print(String(format: "  probe2 per-core after 0.5s: total %.1f%% user %.1f%% cores %d P %.1f%%", p2.total * 100, p2.user * 100, p2.perCore.count, (p2.performance ?? -1) * 100))
+print(String(format: "  probe2 per-core after 0.5s: total %.1f%% user %.1f%% cores %d P %.1f%%",
+    p2.total * 100, p2.user * 100, p2.perCore.count, (p2.performance ?? -1) * 100))
 
 // MARK: Memory / network / disk / GPU
 let mem = MemorySampler()
@@ -88,12 +90,14 @@ var catalog: SensorCatalog!
 measure("Sensor discovery (cold, full SMC walk)", iterations: 1) { catalog = SensorCatalog.load(smc: smc, cacheURL: catURL) }
 measure("Sensor catalog (warm, from cache)", iterations: 20) { _ = SensorCatalog.load(smc: smc, cacheURL: catURL) }
 let groups = Dictionary(grouping: catalog.temperatures, by: \.group).mapValues(\.count)
-print("  groups:", groups.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " "), " power keys:", catalog.power.count, " fans:", catalog.fans)
+let groupList = groups.sorted { $0.key < $1.key }.map { "\($0.key.rawValue)=\($0.value)" }.joined(separator: " ")
+print("  groups:", groupList, " power keys:", catalog.power.count, " fans:", catalog.fans)
 let sensors = SensorSampler(smc: smc, catalog: catalog)
 sensors.setEnabled([.cpuPerformance, .cpuEfficiency, .gpu, .battery])
 sensors.sample(tick: 0) // priming sweep
 measure("Sensors steady tick (4 groups x3 keys)", iterations: 200) { sensors.sample(tick: 0) }
-for (g, r) in sensors.latest.sorted(by: { $0.key < $1.key }) { print(String(format: "  %-16@ max %.1f°C avg %.1f°C", g.displayName as NSString, r.max, r.average)) }
+for (g, r) in sensors.latest.sorted(by: { $0.key < $1.key }) { print(String(format: "  %-16@ max %.1f°C avg %.1f°C",
+    g.displayName as NSString, r.max, r.average)) }
 
 // MARK: CPU time vs wall time for SMC reads
 func threadCPUNanos() -> UInt64 { clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) }
@@ -127,7 +131,8 @@ Thread.sleep(forTimeInterval: 1)
 measure("Processes (libproc, all pids)", iterations: 50) { procs.sample(tick: 0) }
 Thread.sleep(forTimeInterval: 1)
 procs.sample(tick: 0)
-for p in procs.topByCPU.prefix(5) { print(String(format: "  cpu   %-22@ %6.1f%%  %7.1f MB  %6.3f W", p.name as NSString, p.cpu * 100, Double(p.memory) / 1e6, p.watts)) }
+for p in procs.topByCPU.prefix(5) { print(String(format: "  cpu   %-22@ %6.1f%%  %7.1f MB  %6.3f W",
+    p.name as NSString, p.cpu * 100, Double(p.memory) / 1e6, p.watts)) }
 for p in procs.topByPower.prefix(3) { print(String(format: "  power %-22@ %6.3f W", p.name as NSString, p.watts)) }
 
 // MARK: IOReport energy

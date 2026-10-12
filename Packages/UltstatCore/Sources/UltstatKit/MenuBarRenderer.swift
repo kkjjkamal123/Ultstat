@@ -77,10 +77,12 @@ public enum MenuBarRenderer {
                 return Segment(symbol: icon, content: style == .bar ? .bar(m.usedFraction) : .text(MetricFormat.percent(m.usedFraction)), slot: "88%")
             case .network:
                 guard let n = r.network else { return Segment(symbol: nil, content: .stacked(top: "↑ –", bottom: "↓ –"), slot: "↑ 888K") }
-                return Segment(symbol: nil, content: .stacked(top: "↑ " + MetricFormat.rate(n.upload), bottom: "↓ " + MetricFormat.rate(n.download)), slot: "↑ 888K")
+                let content = Segment.Content.stacked(top: "↑ " + MetricFormat.rate(n.upload), bottom: "↓ " + MetricFormat.rate(n.download))
+                return Segment(symbol: nil, content: content, slot: "↑ 888K")
             case .disk:
                 guard let d = r.disk else { return nil }
-                return Segment(symbol: nil, content: .stacked(top: "R " + MetricFormat.rate(d.read), bottom: "W " + MetricFormat.rate(d.write)), slot: "W 888K")
+                let content = Segment.Content.stacked(top: "R " + MetricFormat.rate(d.read), bottom: "W " + MetricFormat.rate(d.write))
+                return Segment(symbol: nil, content: content, slot: "W 888K")
             case .temperature:
                 let t = r.sensors[.cpuPerformance]?.max ?? r.sensors[.cpuEfficiency]?.max
                 return Segment(symbol: icon, content: .text(t.map { settings.temperatureUnit.format($0) } ?? "–"), slot: "88°")

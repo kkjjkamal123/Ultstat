@@ -90,6 +90,12 @@ private struct MenuBarSettings: View {
 private struct BatterySettings: View {
     @Environment(AppModel.self) private var model
 
+    /// Two-way binding to one field of the charge policy; writes go through `updatePolicy`.
+    private func policy<T>(_ keyPath: WritableKeyPath<ChargePolicy, T>) -> Binding<T> {
+        Binding(get: { model.settings.stored.chargePolicy[keyPath: keyPath] },
+                set: { v in model.updatePolicy { $0[keyPath: keyPath] = v } })
+    }
+
     var body: some View {
         let policy = model.settings.stored.chargePolicy
         Form {
@@ -109,13 +115,15 @@ private struct BatterySettings: View {
                         Text("\(policy.limit)%").monospacedDigit().frame(width: 40, alignment: .trailing)
                     }
                 }
-                Stepper("Sailing range: \(policy.sailingRange)%", value: Binding(get: { policy.sailingRange }, set: { v in model.updatePolicy { $0.sailingRange = v } }), in: 0...20)
-                Toggle("Discharge to the limit when above it", isOn: Binding(get: { policy.dischargeAboveLimit }, set: { v in model.updatePolicy { $0.dischargeAboveLimit = v } }))
-                Toggle("Heat protection", isOn: Binding(get: { policy.heatProtection != nil }, set: { v in model.updatePolicy { $0.heatProtection = v ? 40 : nil } }))
+                Stepper("Sailing range: \(policy.sailingRange)%", value: self.policy(\.sailingRange), in: 0...20)
+                Toggle("Discharge to the limit when above it", isOn: self.policy(\.dischargeAboveLimit))
+                Toggle("Heat protection", isOn: Binding(get: { policy.heatProtection != nil },
+                                                        set: { v in model.updatePolicy { $0.heatProtection = v ? 40 : nil } }))
                 if let h = policy.heatProtection {
-                    Stepper("Pause charging above \(Int(h))°C", value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
+                    Stepper("Pause charging above \(Int(h))°C",
+                            value: Binding(get: { Int(h) }, set: { v in model.updatePolicy { $0.heatProtection = Double(v) } }), in: 30...50)
                 }
-                Toggle("Use gauge charge instead of macOS percentage", isOn: Binding(get: { policy.useHardwarePercent }, set: { v in model.updatePolicy { $0.useHardwarePercent = v } }))
+                Toggle("Use gauge charge instead of macOS percentage", isOn: self.policy(\.useHardwarePercent))
                 HStack {
                     Button("Top Up to 100% Once") { model.updatePolicy { $0.topUp = true } }
                         .disabled(!model.settings.stored.chargeControlEnabled || policy.topUp)
@@ -131,7 +139,7 @@ private struct BatterySettings: View {
             }
             .disabled(model.helperState != .running)
             Section("MagSafe LED") {
-                Picker("LED", selection: Binding(get: { policy.magSafeLED }, set: { v in model.updatePolicy { $0.magSafeLED = v } })) {
+                Picker("LED", selection: self.policy(\.magSafeLED)) {
                     Text("System").tag(0)
                     Text("Off").tag(1)
                     Text("Green").tag(3)
@@ -162,7 +170,10 @@ private struct BatterySettings: View {
             LabeledContent("Charge helper") {
                 Button("Install") { model.installHelper() }.accessibilityIdentifier("settings.installHelper")
             }
-            Text("Charge limiting needs a small background helper with administrator rights. It only accepts commands from this copy of Ultstat and restores normal charging when removed.")
+            Text("""
+                Charge limiting needs a small background helper with administrator rights. \
+                It only accepts commands from this copy of Ultstat and restores normal charging when removed.
+                """)
                 .font(.callout).foregroundStyle(.secondary)
         case .unavailable(let why):
             LabeledContent("Charge helper") { Text(why).foregroundStyle(.red) }

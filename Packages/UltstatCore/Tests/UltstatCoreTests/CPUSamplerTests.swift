@@ -12,7 +12,7 @@ import Testing
     @Test func totalsAreBoundedAndSkipFirstTick() async throws {
         let s = CPUSampler()
         s.sample(tick: 0)
-        #expect(s.history.count == 0, "first tick only establishes a baseline")
+        #expect(s.history.isEmpty, "first tick only establishes a baseline")
         try await Task.sleep(for: .milliseconds(1100)) // outlive xnu's host_statistics cache window
         s.sample(tick: 1)
         let l = s.latest
