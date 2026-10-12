@@ -21,6 +21,8 @@ final class ChargeController: @unchecked Sendable {
     private var machine = ChargeStateMachine()
     private(set) var policy: ChargePolicy
     private var lastError: String?
+    /// Kept separately so a successful charge write doesn't clear an LED failure.
+    private var ledError: String?
     private var lastPercent: Double = 0
     private var sleeping = false
     private var powerPort: IONotificationPortRef?
@@ -51,7 +53,7 @@ final class ChargeController: @unchecked Sendable {
             }
             battery?.start()
             registerForSleep()
-            try? actuator?.setMagSafeLED(policy.magSafeLED)
+            applyLED()
             evaluate()
         }
     }
@@ -62,14 +64,14 @@ final class ChargeController: @unchecked Sendable {
         queue.sync {
             policy = newPolicy.validated()
             Self.savePolicy(policy)
-            do { try actuator?.setMagSafeLED(policy.magSafeLED) } catch { lastError = "\(error)" }
+            applyLED()
             evaluate()
-            return lastError
+            return combinedError
         }
     }
 
     func status() -> ChargeStatus {
-        queue.sync { ChargeStatus(mechanism: mechanism, mode: machine.mode, policy: policy, lastError: lastError) }
+        queue.sync { ChargeStatus(mechanism: mechanism, mode: machine.mode, policy: policy, lastError: combinedError) }
     }
 
     func restoreDefaults() -> String? {
@@ -126,6 +128,21 @@ final class ChargeController: @unchecked Sendable {
         t.setEventHandler { [weak self] in self?.evaluate() }
         t.resume()
         holdTimer = t
+    }
+
+    private var combinedError: String? {
+        let parts = [lastError, ledError.map { "MagSafe LED: \($0)" }].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: "; ")
+    }
+
+    private func applyLED() {
+        do {
+            try actuator?.setMagSafeLED(policy.magSafeLED)
+            ledError = nil
+        } catch {
+            ledError = "\(error)"
+            log.error("LED failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     private func batteryTemperature() -> Double? {

@@ -22,12 +22,16 @@ struct ult_energy_reader {
     uint64_t prev_ns;
 };
 
+/* Must accept exactly what ult_energy_read sums: "GPU Energy*", "*CPU Energy*", "ANE*", "DRAM*".
+   Exact matching would drop numbered channels ("ANE0", "DRAM0") on chips that use them. */
+static bool has_prefix(CFStringRef s, CFStringRef p);
+static bool contains(CFStringRef s, CFStringRef p);
+
 static bool wanted(CFStringRef name, bool gpu_only) {
-    static const CFStringRef names[] = { CFSTR("GPU Energy"), CFSTR("CPU Energy"), CFSTR("ANE"), CFSTR("DRAM") };
-    size_t n = gpu_only ? 1 : sizeof names / sizeof *names;
-    for (size_t i = 0; i < n; i++)
-        if (name && CFStringCompare(name, names[i], 0) == kCFCompareEqualTo) return true;
-    return false;
+    if (!name) return false;
+    if (has_prefix(name, CFSTR("GPU Energy"))) return true;
+    if (gpu_only) return false;
+    return contains(name, CFSTR("CPU Energy")) || has_prefix(name, CFSTR("ANE")) || has_prefix(name, CFSTR("DRAM"));
 }
 
 ult_energy_reader *ult_energy_open(bool gpu_only) {

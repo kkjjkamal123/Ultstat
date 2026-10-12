@@ -119,10 +119,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate {
     }
 
     nonisolated func popoverDidClose(_ notification: Notification) {
+        let closed = (notification.object as AnyObject?).map(ObjectIdentifier.init)
         MainActor.assumeIsolated {
+            // A late close from a previous popover must not tear down the one just opened.
+            guard let popover, closed == ObjectIdentifier(popover) else { return }
             // Tear down the SwiftUI hierarchy so nothing renders or observes while closed.
-            popover?.contentViewController = nil
-            popover = nil
+            popover.contentViewController = nil
+            self.popover = nil
             item.button?.highlight(false)
             model.popoverClosed()
         }

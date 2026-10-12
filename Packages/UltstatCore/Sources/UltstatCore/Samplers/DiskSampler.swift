@@ -15,7 +15,8 @@ public struct DiskActivity: Sendable, Equatable {
 }
 
 /// Disk throughput from every `IOBlockStorageDriver`'s `Statistics`, and boot-volume capacity
-/// from `statfs`. Driver handles are cached and refreshed only when the set changes size.
+/// from `statfs`. Driver handles are cached; every `capacityEvery` samples the set is rescanned
+/// and replaced if drives were attached or ejected.
 /// Capacity is refreshed every `capacityEvery` samples (it moves slowly and `statfs` hits the FS).
 public final class DiskSampler: Sampler {
     public let cadence: Int
@@ -59,8 +60,18 @@ public final class DiskSampler: Sampler {
 
     public func sample(tick: UInt64) {
         let result = state.withLock { s -> DiskActivity? in
-            if s.drivers.isEmpty { s.drivers = Self.findDrivers() }
-            if s.samples % max(1, capacityEvery) == 0 { s.capacity = Self.bootCapacity() }
+            if s.samples % max(1, capacityEvery) == 0 {
+                s.capacity = Self.bootCapacity()
+                // Pick up drives attached or ejected since the last scan; rebaseline if the set changed.
+                let fresh = Self.findDrivers()
+                if fresh.count != s.drivers.count || s.drivers.isEmpty {
+                    s.drivers.forEach { IOObjectRelease($0) }
+                    s.drivers = fresh
+                    s.last = nil
+                } else {
+                    fresh.forEach { IOObjectRelease($0) }
+                }
+            }
             s.samples += 1
 
             var r: UInt64 = 0, w: UInt64 = 0
