@@ -130,7 +130,7 @@ struct SettingsDashboard: View {
             }
             SmoothChart(series: [(model.batteryLevelHistory, Theme.aqua)], maxValue: 100,
                         reference: model.settings.stored.chargeControlEnabled ? Float(model.settings.stored.chargePolicy.limit) : nil,
-                        referenceColor: Theme.orange, height: 150)
+                        referenceColor: Theme.orange, height: 150, capacity: 720)
             Text(model.batteryLevelHistory.count < 2 ? "Builds up while Ultstat runs (one point a minute)." : "Dashed line: your charge limit")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }

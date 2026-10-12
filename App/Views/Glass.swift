@@ -116,6 +116,9 @@ struct SmoothChart: View {
     var height: CGFloat = 78
     /// Tile sparkline: no background, grid or marker.
     var compact = false
+    /// Number of sample slots across the width. Fixed, with the newest sample at the right edge, so
+    /// every reading moves the curve exactly one slot left whether the history is full or filling.
+    var capacity = 180
 
     var body: some View {
         let all = series.flatMap(\.0)
@@ -137,7 +140,8 @@ struct SmoothChart: View {
                     }
                 }
             }
-            LayerChart(series: series, top: top, minValue: minValue, compact: compact)
+            LayerChart(series: series.map { (Array($0.0.suffix(capacity)), $0.1) }, top: top, minValue: minValue, compact: compact,
+                       capacity: capacity)
         }
         .frame(height: height)
         .padding(.horizontal, compact ? 0 : 6)
@@ -173,10 +177,12 @@ private struct LayerChart: NSViewRepresentable {
     var top: Float
     var minValue: Float
     var compact: Bool
+    var capacity: Int
 
     func makeNSView(context: Context) -> ChartLayerView { ChartLayerView() }
 
     func updateNSView(_ view: ChartLayerView, context: Context) {
+        view.capacity = max(2, capacity)
         view.apply(series.map { ChartLayerView.Series(values: $0.0, color: NSColor($0.1)) }, top: top, minValue: minValue, compact: compact)
     }
 }
@@ -199,6 +205,8 @@ final class ChartLayerView: NSView {
     private var top: Float = 1
     private var minValue: Float = 0
     private var compact = false
+    var capacity = 180
+    private var step: CGFloat { bounds.width / CGFloat(capacity - 1) }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -215,17 +223,17 @@ final class ChartLayerView: NSView {
         guard new != series || newTop != top || compact != self.compact else { return }
         let old = series
         let oldTop = top
-        // A normal tick: same series, each one sample longer (growing) or the same length (full buffer, advanced).
-        let advanced = !old.isEmpty && old.count == new.count && zip(old, new).allSatisfy {
-            $1.values.count >= $0.values.count && $1.values.count > 1 && $0.values != $1.values
+        // A normal tick: every series gained exactly one newest sample (the oldest may have dropped off).
+        let advanced = !old.isEmpty && old.count == new.count && zip(old, new).allSatisfy { o, n in
+            n.values.count > 1 && (n.values.count == o.values.count + 1 || (n.values.count == o.values.count && o.values != n.values))
+                && Array(n.values.dropLast().suffix(max(0, o.values.count - 1))) == Array(o.values.suffix(max(0, o.values.count - 1)))
         }
         series = new
         top = newTop
         self.minValue = minValue
         self.compact = compact
         redraw()
-        guard advanced, Motion.enabled, window?.occlusionState.contains(.visible) == true, let n = new.first?.values.count, n > 1 else { return }
-        let step = bounds.width / CGFloat(n - 1)
+        guard advanced, Motion.enabled, window?.occlusionState.contains(.visible) == true else { return }
         let span = CGFloat(oldTop - minValue)
         let scaleY = span > 0 ? CGFloat(newTop - minValue) / span : 1
         let from = CATransform3DConcat(CATransform3DMakeScale(1, scaleY, 1), CATransform3DMakeTranslation(step, 0, 0))
@@ -289,15 +297,17 @@ final class ChartLayerView: NSView {
         }
     }
 
-    /// Points in layer coordinates (origin bottom-left), one extra off the left edge so the slide
-    /// never reveals a gap.
+    /// Points in layer coordinates (origin bottom-left), right-aligned in `capacity` fixed slots. A
+    /// full history gets one extra point off the left edge so the slide never reveals a gap.
     private func points(_ values: [Float], in plot: CGRect) -> [CGPoint] {
         let n = values.count
         guard n > 1 else { return [] }
-        let step = bounds.width / CGFloat(n - 1)
+        let step = self.step
+        let first = CGFloat(capacity - n)   // slot of the oldest sample
         let span = max(top - minValue, 0.0001)
         func y(_ v: Float) -> CGFloat { plot.minY + plot.height * CGFloat(min(max((v - minValue) / span, 0), 1)) }
-        return [CGPoint(x: -step, y: y(values[0]))] + values.enumerated().map { CGPoint(x: CGFloat($0) * step, y: y($1)) }
+        let pts = values.enumerated().map { CGPoint(x: (first + CGFloat($0)) * step, y: y($1)) }
+        return n >= capacity ? [CGPoint(x: -step, y: y(values[0]))] + pts : pts
     }
 
     private func addSeriesLayers() {

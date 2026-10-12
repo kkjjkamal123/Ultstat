@@ -502,7 +502,7 @@ private struct BatteryModule: View {
                 }
                 SmoothChart(series: [(model.batteryLevelHistory, Theme.aqua)], maxValue: 100,
                             reference: model.settings.stored.chargeControlEnabled ? Float(model.settings.stored.chargePolicy.limit) : nil,
-                            referenceColor: Theme.orange)
+                            referenceColor: Theme.orange, capacity: 720)
                 Text(model.batteryLevelHistory.count < 2 ? "Builds up while Ultstat runs (one point a minute)." : "Last \(historySpan)")
                     .font(.system(size: 10)).foregroundStyle(.tertiary)
             }
