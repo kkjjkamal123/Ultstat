@@ -25,6 +25,13 @@ public protocol ChargeActuator: AnyObject, Sendable {
     func setMagSafeLED(_ mode: Int) throws
     /// Puts the hardware back to stock behaviour. Must be safe to call repeatedly.
     func restoreStock() throws
+    /// Called when the helper is about to stop (shutdown, restart, update). Must never leave the
+    /// adapter bypassed. Defaults to `restoreStock()`; a limit the OS enforces by itself may stay.
+    func prepareForExit() throws
+}
+
+extension ChargeActuator {
+    public func prepareForExit() throws { try restoreStock() }
 }
 
 public enum ChargeControlError: Error, CustomStringConvertible, Sendable {
@@ -174,6 +181,12 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
 
     public func setMagSafeLED(_ mode: Int) throws {
         if cache.has(ledKey) { try cache.set(ledKey, [UInt8(mode)]) }
+    }
+
+    /// macOS enforces the native limit itself, including while the Mac is shut down, so it stays.
+    /// Only the adapter bypass (which nothing would supervise) is turned off.
+    public func prepareForExit() throws {
+        if cache.has("CHIE") { try cache.set("CHIE", [0x00]) }
     }
 
     public func restoreStock() throws {

@@ -175,3 +175,24 @@ final class FakeFloatSMC: SMCAccess, @unchecked Sendable {
                                            policy: ChargePolicy(limit: 80), percent: 90) == nil)
     }
 }
+
+@Suite struct ExitBehaviourTests {
+    @Test func nativeLimitSurvivesExitButAdapterIsRestored() throws {
+        let smc = FakeSMC(["CHIE": [0]])
+        let prefs = FakePrefs()
+        let a = NativeLimitActuator(smc: smc, prefs: prefs)
+        try a.apply(ChargeOutputs(allowCharging: false, discharge: true), mode: .discharging, policy: ChargePolicy(limit: 70), percent: 90)
+        #expect(smc.values["CHIE"] == [0x08])
+        try a.prepareForExit()
+        #expect(smc.values["CHIE"] == [0x00], "adapter must never stay bypassed after exit")
+        #expect(prefs.store["mclLimitValue"] as? Int == 70, "macOS keeps enforcing the limit while the helper is gone")
+    }
+
+    @Test func smcPathsReleaseEverythingOnExit() throws {
+        let smc = FakeSMC(["CHTE": [0, 0, 0, 0], "CHIE": [0]])
+        let a = TahoeSMCActuator(smc: smc)
+        try a.apply(ChargeOutputs(allowCharging: false, discharge: true), mode: .discharging, policy: ChargePolicy(), percent: 90)
+        try a.prepareForExit()
+        #expect(smc.values["CHTE"] == [0, 0, 0, 0] && smc.values["CHIE"] == [0])
+    }
+}

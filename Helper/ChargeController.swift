@@ -78,9 +78,13 @@ final class ChargeController: @unchecked Sendable {
         }
     }
 
-    /// Called on SIGTERM and before exit. Never leaves the adapter disabled or charging inhibited.
+    /// Called on SIGTERM (shutdown, restart, update). Never leaves the adapter bypassed. SMC-based
+    /// limits are released because nothing enforces them while the helper is gone; the native
+    /// macOS limit is kept because macOS enforces it even while the Mac is off.
     func shutdown() {
-        queue.sync { _ = restoreStockLocked() }
+        queue.sync {
+            do { try actuator?.prepareForExit() } catch { log.error("exit prep failed: \(String(describing: error), privacy: .public)") }
+        }
     }
 
     // MARK: Policy evaluation
