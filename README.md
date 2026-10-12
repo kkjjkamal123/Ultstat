@@ -14,9 +14,9 @@ MacBook Air M5, macOS 27.0.1. Default menu bar (CPU, memory, temperature, batter
 
 | | CPU time | Wake-ups | Energy impact | Memory |
 |---|---|---|---|---|
-| **Ultstat** | **1.6 ms/s** | **0.5 /s** | **0.16** | **15 MB** |
-| Stats 3.0.20 | 57.9 ms/s | 8.9 /s | 7.43 | 151 MB |
-| AlDente 1.39.4 | 10.4 ms/s | 3.2 /s | 1.43 | 80 MB |
+| **Ultstat** | **0.85 ms/s** | **0.56 /s** | **0.08** | **15 MB** |
+| Stats 3.0.20 | 56.8 ms/s | 9.0 /s | 7.09 | 151 MB |
+| AlDente 1.39.4 | 9.6 ms/s | 2.9 /s | 1.27 | 80 MB |
 
 How it gets there:
 
