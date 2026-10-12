@@ -505,29 +505,88 @@ private struct AboutSettings: View {
     }
 }
 
-/// Live preview of the menu-bar items as currently configured.
+/// Live preview of the menu bar that is also the place to arrange it: drag a reading left or right
+/// and the others make room; the real menu bar follows as soon as you drop.
 private struct MenuBarPreview: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
+    @State private var dragging: MenuBarItem?
 
     var body: some View {
         let s = model.settings.stored
-        let metrics: [MenuBarItem?] = s.items.isEmpty ? [nil] : s.items.map(Optional.some)
         let tint = (scheme == .dark ? NSColor.white : NSColor.black).cgColor
-        let parts = metrics.compactMap { m in
-            StatusItemController.image(metric: m, segments: StatusItemController.segments(metric: m, model: model), tint: tint, scale: 2)
-        }
         // Separate items: macOS's own gap (about 16 pt on this bar). Single item: the chosen spacing.
         let spacing: CGFloat = s.separateItems ? 16 : CGFloat(s.itemSpacing)
-        HStack {
-            Spacer()
-            if let (img, size, _) = StatusItemController.compose(parts, spacing: spacing, scale: 2) {
-                Image(decorative: img, scale: 2).frame(width: size.width, height: size.height)
+        VStack(spacing: 6) {
+            // Each reading has 3 pt of grab area per side, taken out of the gap so spacing stays true.
+            HStack(spacing: max(0, spacing - 6)) {
+                if s.items.isEmpty {
+                    Text("No readings shown. Turn some on below.").font(.callout).foregroundStyle(.secondary)
+                }
+                ForEach(s.items) { item in
+                    if let (img, size) = StatusItemController.image(metric: item, segments: StatusItemController.segments(metric: item, model: model),
+                                                                    tint: tint, scale: 2) {
+                        Image(decorative: img, scale: 2)
+                            .frame(width: size.width, height: size.height)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 2)
+                            .background(dragging == item ? Color.accentColor.opacity(0.25) : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+                            .opacity(dragging == item ? 0.6 : 1)
+                            .contentShape(Rectangle())
+                            .onDrag {
+                                dragging = item
+                                return NSItemProvider(object: item.rawValue as NSString)
+                            }
+                            .onDrop(of: [.text], delegate: ReorderDrop(target: item, dragging: $dragging, settings: model.settings))
+                            .help("Drag to move \(item.title)")
+                            .accessibilityLabel(item.title)
+                    }
+                }
             }
-            Spacer()
+            .frame(maxWidth: .infinity, minHeight: 30)
+            .padding(.vertical, 8)
+            .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onDrop(of: [.text], delegate: EndDrag(dragging: $dragging))
+            // A drag dropped outside the preview never reports back; clear it once the button is up.
+            .onContinuousHover { _ in if dragging != nil, NSEvent.pressedMouseButtons == 0 { dragging = nil } }
+            Text("Drag readings to rearrange them.").font(.caption).foregroundStyle(.secondary)
         }
-        .padding(.vertical, 8)
-        .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("Menu bar preview")
+    }
+}
+
+/// Moves the dragged reading into the hovered one's place as soon as the pointer enters it.
+private struct ReorderDrop: DropDelegate {
+    let target: MenuBarItem
+    @Binding var dragging: MenuBarItem?
+    let settings: AppSettings
+
+    @MainActor func dropEntered(info: DropInfo) {
+        guard let d = dragging, d != target, let from = settings.stored.items.firstIndex(of: d),
+              let to = settings.stored.items.firstIndex(of: target) else { return }
+        withAnimation(.smooth(duration: 0.25)) {
+            settings.stored.items.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    @MainActor func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
+    }
+}
+
+/// Clears the drag state when a drop lands on the preview background.
+private struct EndDrag: DropDelegate {
+    @Binding var dragging: MenuBarItem?
+
+    func dropUpdated(info: DropInfo) -> DropProposal? { DropProposal(operation: .move) }
+
+    @MainActor func performDrop(info: DropInfo) -> Bool {
+        dragging = nil
+        return true
     }
 }
