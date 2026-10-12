@@ -557,7 +557,6 @@ private struct BatteryModule: View {
         return m >= 60 ? "\(m / 60)h \(m % 60)m" : "\(m) min"
     }
 
-
     private func hero(_ b: BatterySnapshot) -> some View {
         HStack(spacing: 14) {
             BatteryGlyph(percent: b.percent, charging: b.isCharging, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
