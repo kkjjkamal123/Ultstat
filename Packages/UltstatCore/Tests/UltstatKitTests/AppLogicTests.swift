@@ -64,6 +64,24 @@ import UltstatCore
         #expect(unnamed < widths[1])
     }
 
+    /// Menu-bar battery time: shown on battery and while charging, hidden while held on the adapter.
+    @Test func batteryTimeInMenuBar() {
+        func time(plugged: Bool, charging: Bool, amps: Int, toEmpty: Int? = nil, toFull: Int? = nil) -> String? {
+            var r = Readings()
+            r.battery = BatterySnapshot(percent: 80, hardwarePercent: nil, isCharging: charging, externalConnected: plugged, fullyCharged: false,
+                                        amperage: amps, voltage: 12_000, cycleCount: 1, designCapacity: 5760, fullChargeCapacity: 5600,
+                                        nominalChargeCapacity: nil, remainingCapacity: 4500, minutesToEmpty: toEmpty, minutesToFull: toFull,
+                                        notChargingReason: nil, adapter: nil, flow: nil)
+            guard case .battery(_, _, let t, _) = MenuBarRenderer.segments(for: [.battery], readings: r, settings: .init()).first?.content else { return nil }
+            return t
+        }
+        #expect(time(plugged: false, charging: false, amps: -900, toEmpty: 185) == "3:05", "on battery: macOS's estimate")
+        #expect(time(plugged: false, charging: false, amps: -1000) == "4:30", "on battery without macOS estimate: from the gauge")
+        #expect(time(plugged: true, charging: true, amps: 2000, toFull: 42) == "0:42", "charging: time to full")
+        #expect(time(plugged: true, charging: false, amps: 0) == "", "held at a limit: no time")
+        #expect(time(plugged: true, charging: false, amps: -800) != "", "adapter bypassed (discharging): time shown")
+    }
+
     @Test func missingDataStillRenders() {
         let segs = MenuBarRenderer.segments(for: MenuBarItem.allCases, readings: Readings(), settings: .init())
         #expect(segs.contains { $0.content == .labeled(caption: "CPU", value: "–") })
