@@ -8,6 +8,16 @@ enum StressTester {
     private static let log = Logger(subsystem: "io.github.kkjjkamal23.Ultstat", category: "stress")
 
     static func runIfRequested(statusItem: StatusItemController, model: AppModel) {
+        let hold = UserDefaults.standard.integer(forKey: "UltstatHoldPopover")
+        if hold > 0 {
+            // Opens the popover once and keeps it open for `hold` seconds (measures steady open cost).
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(2))
+                statusItem.togglePopover()
+                try? await Task.sleep(for: .seconds(hold))
+                statusItem.togglePopover()
+            }
+        }
         let settingsCycles = UserDefaults.standard.integer(forKey: "UltstatStressSettings")
         if settingsCycles > 0 { stressSettings(settingsCycles, model: model) }
         let n = UserDefaults.standard.integer(forKey: "UltstatStressPopover")

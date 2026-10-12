@@ -4,7 +4,6 @@ import UltstatKit
 
 struct DashboardView: View {
     @Environment(AppModel.self) private var model
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let r = model.readings
@@ -26,7 +25,9 @@ struct DashboardView: View {
                     if !r.accessories.isEmpty { accessoriesCard(r) }
                     ProcessesCard()
                 }
-                .animation(reduceMotion ? nil : .snappy(duration: 0.3), value: r)
+                // No blanket `.animation(value: readings)`: it interpolated every card each tick, and Canvas
+                // sparklines are CPU-rasterised, so each 0.3 s animation redrew them at display rate.
+                // Measured with the popover open: 143 ms/s CPU with it. Meters animate on their own.
             }
             .scrollIndicators(.never)
             footer
