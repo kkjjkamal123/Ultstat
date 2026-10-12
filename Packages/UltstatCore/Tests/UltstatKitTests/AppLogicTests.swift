@@ -110,9 +110,21 @@ import UltstatCore
 }
 
 @MainActor
-@Suite struct AppSettingsTests {
+@Suite final class AppSettingsTests {
+    /// Suites created by this test; deleted afterwards so test runs leave nothing in ~/Library/Preferences.
+    private var suites: [String] = []
+
+    deinit {
+        let prefs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
+        for name in suites {
+            UserDefaults.standard.removePersistentDomain(forName: name)
+            try? FileManager.default.removeItem(at: prefs.appendingPathComponent("\(name).plist"))
+        }
+    }
+
     private func freshDefaults() -> UserDefaults {
         let name = "ultstat.tests.\(UUID().uuidString)"
+        suites.append(name)
         let d = UserDefaults(suiteName: name)!
         d.removePersistentDomain(forName: name)
         return d

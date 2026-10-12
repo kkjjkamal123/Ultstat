@@ -11,7 +11,15 @@ final class AppModel {
     /// `-UltstatEphemeralSettings YES` (UI tests) uses a throwaway store so tests never touch real settings.
     let settings: AppSettings = {
         guard UserDefaults.standard.bool(forKey: "UltstatEphemeralSettings") else { return AppSettings() }
-        let name = "io.github.kkjjkamal23.Ultstat.ephemeral.\(ProcessInfo.processInfo.processIdentifier)"
+        let prefix = "io.github.kkjjkamal23.Ultstat.ephemeral."
+        let name = prefix + "\(ProcessInfo.processInfo.processIdentifier)"
+        // Earlier test runs are usually killed, never removing their store; clear those now.
+        let prefs = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Preferences")
+        for file in (try? FileManager.default.contentsOfDirectory(atPath: prefs.path)) ?? []
+        where file.hasPrefix(prefix) && file != name + ".plist" {
+            UserDefaults.standard.removePersistentDomain(forName: String(file.dropLast(6)))
+            try? FileManager.default.removeItem(at: prefs.appendingPathComponent(file))
+        }
         let d = UserDefaults(suiteName: name)!
         d.removePersistentDomain(forName: name)
         return AppSettings(defaults: d)
@@ -232,16 +240,31 @@ final class AppModel {
     func reconcileStatusItems() {
         let s = settings.stored
         let wanted: [[MenuBarItem]] = s.items.isEmpty ? [[]] : (s.separateItems ? s.items.map { [$0] } : [s.items])
-        guard wanted != statusItems.map(\.metrics) else { return }
+        let current = statusItems.map(\.metrics)
+        guard wanted != current else { return }
         let single = !s.separateItems || s.items.isEmpty
         if single, statusItems.count == 1, statusItems[0].isSingleItem {
             statusItems[0].setMetrics(wanted[0])
             return
         }
+        // macOS remembers where each separate item sits, by its name, and puts a recreated item back
+        // there. When the same items were only reordered (the Settings preview), give them new names
+        // so macOS places them in the new order. Otherwise names stay, and Cmd-drag positions survive.
+        if !single, Set(wanted.flatMap { $0 }) == Set(current.flatMap { $0 }), wanted.count == current.count {
+            orderGeneration += 1
+        }
         for item in statusItems { item.remove() }
+        let gen = orderGeneration
         statusItems = wanted.reversed().map { m in
-            StatusItemController(model: self, metrics: m, autosaveName: single ? "main" : (m.first?.rawValue ?? "main"))
+            StatusItemController(model: self, metrics: m,
+                                 autosaveName: single ? "main" : "\(m.first?.rawValue ?? "main")\(gen > 0 ? "-\(gen)" : "")")
         }.reversed()
+    }
+
+    /// Bumped whenever separate items are reordered; part of their names (see reconcileStatusItems).
+    private var orderGeneration: Int {
+        get { UserDefaults.standard.integer(forKey: "menuBarOrderGeneration") }
+        set { UserDefaults.standard.set(newValue, forKey: "menuBarOrderGeneration") }
     }
 
     func closeAllPanels() {
