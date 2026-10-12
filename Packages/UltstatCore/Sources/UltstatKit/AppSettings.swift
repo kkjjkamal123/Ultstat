@@ -77,6 +77,28 @@ public final class AppSettings {
             AlertRule(id: UUID(uuidString: "6D7C3A10-0003-4C6E-9B1D-000000000003")!,
                       metric: .cpuAbove, threshold: 90, sustain: 60, enabled: false),
         ]
+
+        private enum CodingKeys: String, CodingKey {
+            case items, styles, interval, temperatureUnit, showIcons, chargePolicy, chargeControlEnabled,
+                 lowPowerSampling, bluetoothAccessories, alerts
+        }
+
+        /// Every field falls back to its default, so adding a setting never discards a user's saved ones
+        /// (the synthesized decoder throws on any missing key).
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            let d = Stored()
+            items = (try? c.decodeIfPresent([MenuBarItem].self, forKey: .items)) ?? d.items
+            styles = (try? c.decodeIfPresent([MenuBarItem: WidgetStyle].self, forKey: .styles)) ?? d.styles
+            interval = (try? c.decodeIfPresent(Int.self, forKey: .interval)) ?? d.interval
+            temperatureUnit = (try? c.decodeIfPresent(TemperatureUnit.self, forKey: .temperatureUnit)) ?? d.temperatureUnit
+            showIcons = (try? c.decodeIfPresent(Bool.self, forKey: .showIcons)) ?? d.showIcons
+            chargePolicy = (try? c.decodeIfPresent(ChargePolicy.self, forKey: .chargePolicy)) ?? d.chargePolicy
+            chargeControlEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .chargeControlEnabled)) ?? d.chargeControlEnabled
+            lowPowerSampling = (try? c.decodeIfPresent(Bool.self, forKey: .lowPowerSampling)) ?? d.lowPowerSampling
+            bluetoothAccessories = (try? c.decodeIfPresent(Bool.self, forKey: .bluetoothAccessories)) ?? d.bluetoothAccessories
+            alerts = (try? c.decodeIfPresent([AlertRule].self, forKey: .alerts)) ?? d.alerts
+        }
     }
 
     private static let key = "settings.v1"

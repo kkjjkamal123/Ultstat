@@ -175,3 +175,40 @@ import UltstatCore
         #expect(data.contains { $0 != 0 }, "image must not be fully transparent")
     }
 }
+
+@MainActor
+@Suite struct SettingsMigrationTests {
+    /// A blob saved before newer fields existed must keep every field it does contain.
+    @Test func oldBlobKeepsItsValues() throws {
+        let old: [String: Any] = [
+            "items": ["cpu", "network"],
+            "interval": 5,
+            "chargeControlEnabled": true,
+            "chargePolicy": ["limit": 70, "sailingRange": 3, "dischargeAboveLimit": false, "topUp": false,
+                             "useHardwarePercent": false, "magSafeLED": 0],
+        ]
+        let data = try PropertyListSerialization.data(fromPropertyList: old, format: .binary, options: 0)
+        let s = try PropertyListDecoder().decode(AppSettings.Stored.self, from: data)
+        #expect(s.items == [.cpu, .network])
+        #expect(s.interval == 5)
+        #expect(s.chargeControlEnabled)
+        #expect(s.chargePolicy.limit == 70)
+        #expect(s.alerts == AppSettings.Stored().alerts, "missing new field takes its default")
+    }
+
+    @Test func corruptFieldFallsBackAlone() throws {
+        let blob: [String: Any] = ["items": ["cpu"], "interval": "not a number"]
+        let data = try PropertyListSerialization.data(fromPropertyList: blob, format: .binary, options: 0)
+        let s = try PropertyListDecoder().decode(AppSettings.Stored.self, from: data)
+        #expect(s.items == [.cpu])
+        #expect(s.interval == AppSettings.Stored().interval)
+    }
+
+    @Test func roundTrip() throws {
+        var s = AppSettings.Stored(items: [.gpu])
+        s.interval = 3
+        s.alerts[0].enabled = true
+        let data = try PropertyListEncoder().encode(s)
+        #expect(try PropertyListDecoder().decode(AppSettings.Stored.self, from: data) == s)
+    }
+}

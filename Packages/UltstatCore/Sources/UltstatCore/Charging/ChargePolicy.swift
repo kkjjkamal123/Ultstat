@@ -45,6 +45,25 @@ public struct ChargePolicy: Codable, Equatable, Sendable {
         self.calibration = calibration
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case limit, sailingRange, dischargeAboveLimit, heatProtection, topUp, useHardwarePercent, magSafeLED, calibration
+    }
+
+    /// Missing or malformed fields take their defaults, so a policy saved by an older helper or app
+    /// is never discarded wholesale when a field is added.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = ChargePolicy()
+        limit = (try? c.decodeIfPresent(Int.self, forKey: .limit)) ?? d.limit
+        sailingRange = (try? c.decodeIfPresent(Int.self, forKey: .sailingRange)) ?? d.sailingRange
+        dischargeAboveLimit = (try? c.decodeIfPresent(Bool.self, forKey: .dischargeAboveLimit)) ?? d.dischargeAboveLimit
+        heatProtection = try? c.decodeIfPresent(Double.self, forKey: .heatProtection)
+        topUp = (try? c.decodeIfPresent(Bool.self, forKey: .topUp)) ?? d.topUp
+        useHardwarePercent = (try? c.decodeIfPresent(Bool.self, forKey: .useHardwarePercent)) ?? d.useHardwarePercent
+        magSafeLED = (try? c.decodeIfPresent(Int.self, forKey: .magSafeLED)) ?? d.magSafeLED
+        calibration = try? c.decodeIfPresent(CalibrationPhase.self, forKey: .calibration)
+    }
+
     public static let stock = ChargePolicy(limit: 100, sailingRange: 0)
 
     public static let limitRange = 20...100

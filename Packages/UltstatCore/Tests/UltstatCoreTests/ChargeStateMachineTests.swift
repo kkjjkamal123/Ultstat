@@ -174,3 +174,13 @@ import Testing
         #expect(try PropertyListDecoder().decode(ChargePolicy.self, from: d) == p)
     }
 }
+
+@Suite struct ChargePolicyDecodingTests {
+    @Test func partialPolicyKeepsKnownFields() throws {
+        let data = try PropertyListSerialization.data(fromPropertyList: ["limit": 65, "magSafeLED": 3], format: .binary, options: 0)
+        let p = try PropertyListDecoder().decode(ChargePolicy.self, from: data)
+        #expect(p.limit == 65 && p.magSafeLED == 3)
+        #expect(p.sailingRange == ChargePolicy().sailingRange)
+        #expect(p.calibration == nil && p.heatProtection == nil)
+    }
+}

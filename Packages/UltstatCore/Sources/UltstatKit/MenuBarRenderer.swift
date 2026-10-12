@@ -231,12 +231,14 @@ public enum MenuBarRenderer {
         if pts.count == 1 { pts = [last, last] }   // right after launch: a flat line at the current level
         let step = r.width / CGFloat(sparklinePoints - 1)
         let x0 = r.maxX - step * CGFloat(pts.count - 1)   // newest sample on the right edge
-        let line = NSBezierPath()
-        for (i, v) in pts.enumerated() {
-            let p = NSPoint(x: x0 + CGFloat(i) * step, y: r.minY + r.height * CGFloat(min(max(v, 0), 1)))
-            if i == 0 { line.move(to: p) } else { line.line(to: p) }
+        let points = pts.enumerated().map { i, v in
+            NSPoint(x: x0 + CGFloat(i) * step, y: r.minY + r.height * CGFloat(min(max(v, 0), 1)))
         }
-        let area = line.copy() as! NSBezierPath
+        let line = NSBezierPath()
+        let area = NSBezierPath()
+        for (i, p) in points.enumerated() {
+            if i == 0 { line.move(to: p); area.move(to: p) } else { line.line(to: p); area.line(to: p) }
+        }
         area.line(to: NSPoint(x: r.maxX, y: r.minY))
         area.line(to: NSPoint(x: x0, y: r.minY))
         area.close()
