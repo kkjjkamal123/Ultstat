@@ -76,9 +76,32 @@ final class AppModel {
 
     @ObservationIgnored private var alertEngine = AlertEngine()
 
-    /// Battery level once a minute for the last 12 hours (the battery panel's chart).
-    @ObservationIgnored private(set) var batteryLevelHistory: [Float] = []
+    /// Battery level once a minute for the last 12 hours (the battery charts). Saved with its
+    /// timestamps so the chart survives relaunches; one small defaults write a minute.
+    @ObservationIgnored private(set) var batteryLevelHistory: [Float] = AppModel.loadBatteryHistory().map(\.level)
+    @ObservationIgnored private var batteryHistoryTimes: [Double] = AppModel.loadBatteryHistory().map(\.time)
     @ObservationIgnored private var lastBatteryLevelSample: UInt64 = 0
+    private static let batteryHistoryKey = "batteryHistory.v1"
+    private static let batteryHistorySpan: Double = 12 * 3600
+
+    private static func loadBatteryHistory() -> [(time: Double, level: Float)] {
+        guard let flat = UserDefaults.standard.array(forKey: batteryHistoryKey) as? [Double], flat.count % 2 == 0 else { return [] }
+        let cutoff = Date().timeIntervalSince1970 - batteryHistorySpan
+        return stride(from: 0, to: flat.count, by: 2).map { (flat[$0], Float(flat[$0 + 1])) }.filter { $0.time >= cutoff }
+    }
+
+    private func appendBatteryLevel(_ percent: Int) {
+        let now = Date().timeIntervalSince1970
+        batteryLevelHistory.append(Float(percent))
+        batteryHistoryTimes.append(now)
+        let keep = batteryHistoryTimes.firstIndex { $0 >= now - Self.batteryHistorySpan } ?? 0
+        if keep > 0 {
+            batteryLevelHistory.removeFirst(keep)
+            batteryHistoryTimes.removeFirst(keep)
+        }
+        guard !UserDefaults.standard.bool(forKey: "UltstatEphemeralSettings") else { return }
+        UserDefaults.standard.set(zip(batteryHistoryTimes, batteryLevelHistory).flatMap { [$0, Double($1)] }, forKey: Self.batteryHistoryKey)
+    }
 
     private func receive(_ r: Readings) {
         readings = r
@@ -86,8 +109,7 @@ final class AppModel {
             let now = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
             if lastBatteryLevelSample == 0 || now - lastBatteryLevelSample >= 60_000_000_000 {
                 lastBatteryLevelSample = now
-                batteryLevelHistory.append(Float(b.percent))
-                if batteryLevelHistory.count > 720 { batteryLevelHistory.removeFirst(batteryLevelHistory.count - 720) }
+                appendBatteryLevel(b.percent)
             }
         }
         if popoverOpen { panelReadings = r }
