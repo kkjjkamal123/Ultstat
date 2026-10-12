@@ -13,8 +13,13 @@ final class DashboardPanel: NSPanel {
     private var keyMonitor: Any?
     var onClose: (() -> Void)?
 
-    init(rootView: some View) {
-        super.init(contentRect: NSRect(origin: .zero, size: Self.size),
+    private let panelWidth: CGFloat
+    private let fitsContent: Bool
+
+    init(rootView: some View, width: CGFloat = DashboardPanel.size.width, fitsContent: Bool = false) {
+        panelWidth = width
+        self.fitsContent = fitsContent
+        super.init(contentRect: NSRect(origin: .zero, size: NSSize(width: width, height: Self.size.height)),
                    styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
         isFloatingPanel = true
         level = .popUpMenu
@@ -38,8 +43,11 @@ final class DashboardPanel: NSPanel {
         let screen = anchor.flatMap { a in NSScreen.screens.first { $0.frame.intersects(a) } } ?? NSScreen.main ?? NSScreen.screens[0]
         let visible = screen.visibleFrame
         let margin: CGFloat = 8
-        let height = min(Self.size.height, visible.height - margin * 2)
-        let width = Self.size.width
+        // Module panels size to their content (like Stats); the summary dashboard uses its fixed size.
+        let fitting = contentView?.fittingSize.height ?? 0
+        let wanted = fitsContent && fitting > 100 ? fitting : Self.size.height
+        let height = min(wanted, visible.height - margin * 2)
+        let width = panelWidth
         // An anchor that is off-screen or zero-sized (item hidden by a menu-bar manager) falls back
         // to the top-right corner, where status items normally live.
         let usable = anchor.flatMap { visible.insetBy(dx: -1, dy: -60).intersects($0) && $0.width > 0 ? $0 : nil }
@@ -53,6 +61,7 @@ final class DashboardPanel: NSPanel {
         alphaValue = 0
         orderFrontRegardless()
         makeKey()
+        makeFirstResponder(nil)   // don't park focus on the first control
         NSAnimationContext.runAnimationGroup { ctx in
             ctx.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.12
             animator().alphaValue = 1

@@ -15,17 +15,21 @@ private let log = Logger(subsystem: "io.github.kkjjkamal23.Ultstat", category: "
 final class StatusItemController: NSObject {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let model: AppModel
+    /// The metric this item shows, or nil for the combined item (all metrics, full dashboard).
+    let metric: MenuBarItem?
     private let contentLayer = CALayer()
     private var panel: DashboardPanel?
     private var lastSegments: [Segment]?
     private var lastAppearance: NSAppearance.Name?
     private var appearanceObservation: NSKeyValueObservation?
     private var lastWidth: CGFloat = 0
+    private var powerStateObserver: (any NSObjectProtocol)?
 
-    init(model: AppModel) {
+    init(model: AppModel, metric: MenuBarItem? = nil) {
         self.model = model
+        self.metric = metric
         super.init()
-        item.autosaveName = "io.github.kkjjkamal23.Ultstat.main"
+        item.autosaveName = "io.github.kkjjkamal23.Ultstat.\(metric?.rawValue ?? "main")"
         item.behavior = []
         if let button = item.button {
             button.title = ""
@@ -33,7 +37,7 @@ final class StatusItemController: NSObject {
             button.target = self
             button.action = #selector(clicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-            button.setAccessibilityIdentifier("ultstat.statusItem")
+            button.setAccessibilityIdentifier("ultstat.statusItem.\(metric?.rawValue ?? "main")")
             button.wantsLayer = true
             contentLayer.contentsGravity = .center
             contentLayer.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
@@ -43,6 +47,13 @@ final class StatusItemController: NSObject {
             }
         }
         render()
+        if metric == .battery {
+            // The pill turns yellow in Low Power Mode, which no battery reading reflects.
+            powerStateObserver = NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil,
+                                                                                queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.render(force: true) }
+            }
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.logVisibility() }
     }
 
@@ -56,7 +67,7 @@ final class StatusItemController: NSObject {
     /// Redraws only when the formatted output or the menu-bar appearance changed.
     func render(force: Bool = false) {
         guard let button = item.button else { return }
-        var segs = MenuBarRenderer.segments(for: model.settings.stored.items, readings: model.readings,
+        var segs = MenuBarRenderer.segments(for: metric.map { [$0] } ?? model.settings.stored.items, readings: model.readings,
                                             settings: model.settings.stored, histories: model.menuBarHistories())
         if segs.isEmpty { segs = [Segment(symbol: "gauge.with.dots.needle.33percent", content: .text(""), slot: "")] }
         let appearance = button.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua, .vibrantDark, .vibrantLight])
@@ -67,9 +78,17 @@ final class StatusItemController: NSObject {
         var tint = NSColor.labelColor.cgColor
         button.effectiveAppearance.performAsCurrentDrawingAppearance { tint = NSColor.labelColor.cgColor }
         let scale = button.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
-        guard let (image, size) = MenuBarRenderer.cgImage(for: segs, scale: scale, tint: tint) else { return }
+        let rendered: (image: CGImage, size: CGSize)?
+        if metric == .battery, segs.count == 1, case .battery(let pct, let charging, let time) = segs[0].content {
+            rendered = MenuBarRenderer.coloredBattery(percent: pct, charging: charging, lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                                                      time: time, textColor: tint, scale: scale)
+        } else {
+            rendered = MenuBarRenderer.cgImage(for: segs, scale: scale, tint: tint)
+        }
+        guard let (image, size) = rendered else { return }
 
-        let width = ceil(size.width) + 8
+        // macOS already spaces adjacent status items; only a hair of padding of our own.
+        let width = ceil(size.width) + (metric == nil ? 8 : 2)
         if width != lastWidth {
             item.length = width
             lastWidth = width
@@ -106,13 +125,20 @@ final class StatusItemController: NSObject {
 
     func closeDashboard() { panel?.dismiss() }
 
+    /// The item's frame in screen coordinates (nil when hidden by a menu-bar manager).
+    var anchorRect: NSRect? {
+        item.button.flatMap { b in b.window.map { $0.convertToScreen(b.convert(b.bounds, to: nil)) } }
+    }
+
     func togglePopover() {
         if let panel, panel.isVisible {
             panel.dismiss()
             return
         }
         let t0 = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
-        let p = DashboardPanel(rootView: DashboardView().environment(model))
+        // Built once and kept: it reads `panelReadings`, which only change while it is visible.
+        model.closeAllPanels()   // one panel at a time
+        let p = panel ?? makePanel()
         p.onClose = { [weak self] in self?.dashboardClosed() }
         panel = p
         model.popoverOpened()
@@ -122,10 +148,21 @@ final class StatusItemController: NSObject {
         log.notice("dashboard open took \(Double(clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - t0) / 1e6, format: .fixed(precision: 1)) ms")
     }
 
-    /// Tear down the SwiftUI hierarchy so nothing renders or observes while closed.
+    private func makePanel() -> DashboardPanel {
+        if let metric {
+            return DashboardPanel(rootView: ModuleView(item: metric).environment(model), width: ModulePanelSize.width, fitsContent: true)
+        }
+        return DashboardPanel(rootView: DashboardView().environment(model))
+    }
+
+    /// Removes the item from the menu bar (settings changed).
+    func remove() {
+        if let o = powerStateObserver { NotificationCenter.default.removeObserver(o) }
+        panel?.dismiss()
+        NSStatusBar.system.removeStatusItem(item)
+    }
+
     private func dashboardClosed() {
-        panel?.contentView = nil
-        panel = nil
         item.button?.highlight(false)
         model.popoverClosed()
     }

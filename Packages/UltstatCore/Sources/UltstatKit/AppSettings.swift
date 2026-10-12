@@ -70,6 +70,8 @@ public final class AppSettings {
         public var chargeControlEnabled = false
         public var lowPowerSampling = true
         public var bluetoothAccessories = false
+        /// One status item for everything (opens the full dashboard) instead of one per metric.
+        public var combineMenuBar = false
         public var alerts: [AlertRule] = [
             // Fixed IDs: defaults must be identical every time they are created.
             AlertRule(id: UUID(uuidString: "6D7C3A10-0001-4C6E-9B1D-000000000001")!,
@@ -82,7 +84,7 @@ public final class AppSettings {
 
         private enum CodingKeys: String, CodingKey {
             case items, styles, interval, temperatureUnit, showIcons, chargePolicy, chargeControlEnabled,
-                 lowPowerSampling, bluetoothAccessories, alerts
+                 lowPowerSampling, bluetoothAccessories, alerts, combineMenuBar
         }
 
         /// Every field falls back to its default, so adding a setting never discards a user's saved ones
@@ -100,6 +102,7 @@ public final class AppSettings {
             lowPowerSampling = (try? c.decodeIfPresent(Bool.self, forKey: .lowPowerSampling)) ?? d.lowPowerSampling
             bluetoothAccessories = (try? c.decodeIfPresent(Bool.self, forKey: .bluetoothAccessories)) ?? d.bluetoothAccessories
             alerts = (try? c.decodeIfPresent([AlertRule].self, forKey: .alerts)) ?? d.alerts
+            combineMenuBar = (try? c.decodeIfPresent(Bool.self, forKey: .combineMenuBar)) ?? d.combineMenuBar
         }
     }
 

@@ -41,10 +41,10 @@ struct DashboardView: View {
     @AppStorage("dashboard.tab") private var tab: DashboardTab = .battery
 
     var body: some View {
-        let r = model.readings
+        let r = model.panelReadings
         VStack(spacing: 10) {
             header
-            SummaryGrid(r: r, select: { tab = $0 })
+            SummaryGrid(r: r, selected: tab, select: { tab = $0 })
             TabStrip(selection: $tab)
             ScrollView {
                 tabContent(r)
@@ -59,6 +59,7 @@ struct DashboardView: View {
         .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.separator.opacity(0.6), lineWidth: 0.5))
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .focusEffectDisabled()   // a click-driven panel; no keyboard focus rings
     }
 
     private var header: some View {
@@ -267,11 +268,12 @@ struct DashboardView: View {
 
     private func sensorsCard(_ r: Readings) -> some View {
         let unit = model.settings.stored.temperatureUnit
-        let hottest = r.sensors.values.map(\.max).max() ?? 0
+        // Headline = hottest of the groups listed below ("Other" holds unlabeled internal sensors).
+        let hottest = r.sensors.filter { $0.key != .other }.values.map(\.max).max() ?? 0
         let status: Color? = hottest >= 95 ? Theme.critical : hottest >= 85 ? Theme.warning : nil
         return MetricCard(title: "Temperatures", symbol: "thermometer.medium", value: unit.format(hottest), status: status) {
             Sparkline(values: model.temperatureHistory(.cpuPerformance), maxValue: 110).frame(height: 26)
-            ForEach(r.sensors.keys.sorted(), id: \.self) { g in
+            ForEach(r.sensors.keys.filter { $0 != .other }.sorted(), id: \.self) { g in
                 if let v = r.sensors[g] {
                     StatRow(label: sensorLabel(g),
                             value: "\(unit.format(v.max))  avg \(unit.format(v.average))")
@@ -439,7 +441,7 @@ struct ProcessesCard: View {
 
     /// Reading `readings.processes` subscribes this view to every tick; the orderings come from the sampler.
     private var rows: [ProcessUsage] {
-        _ = model.readings.processes
+        _ = model.panelReadings.processes
         return switch order {
         case .cpu: model.hub.processes.topByCPU
         case .memory: model.hub.processes.topByMemory

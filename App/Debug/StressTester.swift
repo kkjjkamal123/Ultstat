@@ -32,7 +32,9 @@ enum StressTester {
                 try? await Task.sleep(for: .milliseconds(150))
                 if i % 10 == 0 { log.notice("stress: \(i)/\(n) footprint=\(footprintMB(), privacy: .public) MB") }
             }
-            log.notice("stress: done footprint=\(footprintMB(), privacy: .public) MB")
+            if statusItem.isDashboardOpen { statusItem.closeDashboard() }   // deterministic end state
+            try? await Task.sleep(for: .milliseconds(300))
+            log.notice("stress: done footprint=\(footprintMB(), privacy: .public) MB dashboardOpen=\(statusItem.isDashboardOpen)")
         }
     }
 

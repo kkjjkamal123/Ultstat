@@ -11,6 +11,19 @@ public struct ProcessUsage: Sendable, Equatable, Identifiable {
     public var memory: UInt64
     /// Average power over the last interval, watts (from the kernel's per-process energy counter).
     public var watts: Double
+    /// Disk bytes per second read / written over the last interval.
+    public var diskRead: Double = 0
+    public var diskWrite: Double = 0
+
+    public init(pid: Int32, name: String, cpu: Double, memory: UInt64, watts: Double, diskRead: Double = 0, diskWrite: Double = 0) {
+        self.pid = pid
+        self.name = name
+        self.cpu = cpu
+        self.memory = memory
+        self.watts = watts
+        self.diskRead = diskRead
+        self.diskWrite = diskWrite
+    }
 }
 
 /// Top processes from `libproc`, with no child processes (Stats spawns `ps`/`top` for this).
@@ -24,6 +37,8 @@ public final class ProcessSampler: Sampler {
     private struct Prev {
         var cpuTicks: UInt64
         var energy: UInt64
+        var diskRead: UInt64
+        var diskWrite: UInt64
     }
 
     private struct State {
@@ -34,6 +49,7 @@ public final class ProcessSampler: Sampler {
         var byCPU: [ProcessUsage] = []
         var byMemory: [ProcessUsage] = []
         var byPower: [ProcessUsage] = []
+        var byDisk: [ProcessUsage] = []
     }
 
     private let state = Mutex(State())
@@ -53,6 +69,7 @@ public final class ProcessSampler: Sampler {
     public var topByCPU: [ProcessUsage] { state.withLock { $0.byCPU } }
     public var topByMemory: [ProcessUsage] { state.withLock { $0.byMemory } }
     public var topByPower: [ProcessUsage] { state.withLock { $0.byPower } }
+    public var topByDisk: [ProcessUsage] { state.withLock { $0.byDisk } }
 
     public func sample(tick: UInt64) {
         let top = state.withLock { s -> [ProcessUsage]? in
@@ -83,11 +100,14 @@ public final class ProcessSampler: Sampler {
                 }
                 guard ok else { continue }
                 let ticks = info.ri_user_time &+ info.ri_system_time
-                next[pid] = Prev(cpuTicks: ticks, energy: info.ri_energy_nj)
+                next[pid] = Prev(cpuTicks: ticks, energy: info.ri_energy_nj, diskRead: info.ri_diskio_bytesread, diskWrite: info.ri_diskio_byteswritten)
                 guard dt > 0, let p = s.prev[pid] else { continue }
                 let cpu = ticks >= p.cpuTicks ? Double(ticks - p.cpuTicks) * ticksToNanos / dt : 0
                 let watts = info.ri_energy_nj >= p.energy ? Double(info.ri_energy_nj - p.energy) / dt : 0 // nJ/ns = W
-                all.append(ProcessUsage(pid: pid, name: "", cpu: cpu, memory: info.ri_phys_footprint, watts: watts))
+                let secs = dt / 1e9
+                let dr = info.ri_diskio_bytesread >= p.diskRead ? Double(info.ri_diskio_bytesread - p.diskRead) / secs : 0
+                let dw = info.ri_diskio_byteswritten >= p.diskWrite ? Double(info.ri_diskio_byteswritten - p.diskWrite) / secs : 0
+                all.append(ProcessUsage(pid: pid, name: "", cpu: cpu, memory: info.ri_phys_footprint, watts: watts, diskRead: dr, diskWrite: dw))
             }
             s.prev = next
             s.names = s.names.filter { next[$0.key] != nil }   // forget exited processes
@@ -101,6 +121,7 @@ public final class ProcessSampler: Sampler {
             s.byCPU = top { $0.cpu }
             s.byMemory = top { Double($0.memory) }
             s.byPower = top { $0.watts }
+            s.byDisk = top { $0.diskRead + $0.diskWrite }
             return s.byCPU
         }
         if let top { onUpdate(top) }

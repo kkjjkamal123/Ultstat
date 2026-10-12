@@ -88,6 +88,8 @@ private struct MenuBarSettings: View {
                 }
             }
             Toggle("Show icons", isOn: $settings.stored.showIcons)
+            Toggle("Combine into one menu bar item", isOn: $settings.stored.combineMenuBar)
+                .accessibilityIdentifier("settings.combine")
         }
         .formStyle(.grouped)
     }
@@ -163,6 +165,12 @@ private struct BatterySettings: View {
 
     @ViewBuilder private var helperRow: some View {
         switch model.helperState {
+        case .running where model.helperNeedsUpdate:
+            LabeledContent("Charge helper") {
+                Button(model.installing ? "Updating…" : "Update Helper") { model.installHelper() }.disabled(model.installing)
+            }
+            Text("This version of Ultstat needs to update its helper. You'll be asked for your password.")
+                .font(.callout).foregroundStyle(.secondary)
         case .running:
             LabeledContent("Charge helper") {
                 HStack {

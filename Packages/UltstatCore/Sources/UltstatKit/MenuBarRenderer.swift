@@ -261,6 +261,51 @@ public enum MenuBarRenderer {
         }
     }
 
+    /// iOS-style battery for the menu bar, in colour: a pill whose fill shows the level (white,
+    /// yellow in Low Power Mode, green while charging, red when low), the number inside in dark
+    /// text, a translucent remainder and cap, then time remaining in the menu-bar text colour.
+    public static func coloredBattery(percent: Int, charging: Bool, lowPower: Bool, time: String, textColor: CGColor,
+                                      scale: CGFloat) -> (image: CGImage, size: CGSize)? {
+        let bodySize = NSSize(width: 29, height: 14)
+        let gap: CGFloat = 5
+        let tAttrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(cgColor: textColor) ?? .labelColor]
+        let tSize = (time as NSString).size(withAttributes: tAttrs)
+        let slot = max(ceil(tSize.width), ceil(("8:88" as NSString).size(withAttributes: tAttrs).width))
+        let size = NSSize(width: ceil(bodySize.width + 3 + gap + slot), height: height)
+        guard let ctx = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale), bitsPerComponent: 8,
+                                  bytesPerRow: 0, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.scaleBy(x: scale, y: scale)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        let body = NSRect(x: 0, y: (height - bodySize.height) / 2, width: bodySize.width, height: bodySize.height)
+        let radius: CGFloat = 4.2
+        let text = NSColor(cgColor: textColor) ?? .labelColor
+        text.withAlphaComponent(0.35).setFill()
+        NSBezierPath(roundedRect: body, xRadius: radius, yRadius: radius).fill()
+        NSBezierPath(roundedRect: NSRect(x: body.maxX + 1.2, y: body.midY - 2.6, width: 2, height: 5.2), xRadius: 1, yRadius: 1).fill()
+        let fillColor: NSColor = charging ? NSColor(srgbRed: 0.20, green: 0.80, blue: 0.35, alpha: 1)
+            : lowPower ? NSColor(srgbRed: 1.0, green: 0.80, blue: 0.0, alpha: 1)
+            : percent <= 20 ? NSColor(srgbRed: 1.0, green: 0.27, blue: 0.23, alpha: 1)
+            : text
+        let level = CGFloat(min(max(percent, 0), 100)) / 100
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(roundedRect: body, xRadius: radius, yRadius: radius).addClip()
+        fillColor.setFill()
+        NSRect(x: body.minX, y: body.minY, width: max(4, body.width * level), height: body.height).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        // Dark number on a light fill, light on a dark fill (normal state in a light menu bar).
+        let numberColor: NSColor = fillColor.brightnessComponentSafe > 0.55 ? NSColor(white: 0.08, alpha: 1) : .white
+        let n = (charging ? "⚡︎" : "") + "\(percent)"
+        let nAttrs: [NSAttributedString.Key: Any] = [.font: NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .bold), .foregroundColor: numberColor]
+        let nSize = (n as NSString).size(withAttributes: nAttrs)
+        (n as NSString).draw(at: NSPoint(x: body.midX - nSize.width / 2, y: body.midY - nSize.height / 2), withAttributes: nAttrs)
+        (time as NSString).draw(at: NSPoint(x: body.maxX + 3 + gap, y: (height - tSize.height) / 2), withAttributes: tAttrs)
+        NSGraphicsContext.restoreGraphicsState()
+        guard let img = ctx.makeImage() else { return nil }
+        return (img, size)
+    }
+
     /// Battery outline with a proportional fill; the percentage is XOR-drawn so it reads as a
     /// cut-out over the fill and as ink over the empty part (works as a single-colour template).
     private static func drawBattery(percent: Int, charging: Bool, at o: NSPoint) {
@@ -322,5 +367,13 @@ public enum MenuBarRenderer {
         case .labeled(let c, let v): "\(c) \(v)"
         case .battery(let p, let charging, let t): "Battery \(p)%\(charging ? ", charging" : "")\(t == "--" ? "" : ", \(t) remaining")"
         }
+    }
+}
+
+extension NSColor {
+    /// Brightness that works for any colour space (catalog colours throw on direct access).
+    var brightnessComponentSafe: CGFloat {
+        guard let c = usingColorSpace(.sRGB) else { return 1 }
+        return 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
     }
 }

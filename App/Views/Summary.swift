@@ -6,11 +6,12 @@ import UltstatKit
 struct SummaryGrid: View {
     @Environment(AppModel.self) private var model
     var r: Readings
+    var selected: DashboardTab
     var select: (DashboardTab) -> Void
 
     var body: some View {
         let unit = model.settings.stored.temperatureUnit
-        let hottest = r.sensors[.cpuPerformance]?.max ?? r.sensors.values.map(\.max).max()
+        let hottest = r.sensors[.cpuPerformance]?.max ?? r.sensors.filter { $0.key != .other }.values.map(\.max).max()
         Grid(horizontalSpacing: 8, verticalSpacing: 8) {
             GridRow {
                 tile("CPU", r.cpu.map { MetricFormat.percent($0.total) }, sub: r.cpu?.performance.map { "P " + MetricFormat.percent($0) },
@@ -60,9 +61,15 @@ struct SummaryGrid: View {
             .padding(8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.fill.quaternary, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay {
+                // The tile for the open tab is outlined, so the selection is visible.
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(Theme.series1.opacity(selected == tab ? 0.9 : 0), lineWidth: 1.5)
+            }
             .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
         .buttonStyle(.plain)
+        .focusEffectDisabled()
         .accessibilityLabel("\(title) \(value ?? "unavailable"), \(sub ?? "")")
         .accessibilityHint("Shows \(tab.title) details")
     }
@@ -85,6 +92,7 @@ struct TabStrip: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .focusEffectDisabled()
                 .help(t.title)
                 .accessibilityLabel(t.title)
                 .accessibilityAddTraits(selection == t ? .isSelected : [])

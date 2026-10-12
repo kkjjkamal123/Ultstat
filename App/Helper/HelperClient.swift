@@ -42,19 +42,6 @@ final class HelperClient {
         if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
     }
 
-    /// Fallback for builds without a signing identity, where `SMAppService` refuses to register a daemon.
-    /// Copies the helper to a root-owned location via the administrator prompt (see InstallScript).
-    func installWithAdministratorPrompt() throws {
-        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/\(InstallScript.label)").path
-        guard FileManager.default.isExecutableFile(atPath: helper),
-              let helperHash = Self.cdhash(of: URL(fileURLWithPath: helper)),
-              let appHash = Self.cdhash(of: Bundle.main.bundleURL) else { throw HelperInstallError.missingHelper }
-        let requirement = "identifier \"io.github.kkjjkamal23.Ultstat\" and cdhash H\"\(appHash)\""
-        let shell = InstallScript.installShell(sourceHelper: helper, expectedCDHash: helperHash,
-                                               clientRequirement: requirement, plist: try InstallScript.launchdPlist())
-        try Self.runAsAdministrator(shell)
-    }
-
     /// Team ID of this app's signature, or nil for ad-hoc builds.
     static var teamID: String? {
         var code: SecStaticCode?
@@ -62,6 +49,20 @@ final class HelperClient {
         var info: CFDictionary?
         guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess else { return nil }
         return (info as? [String: Any])?[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
+    /// Runs the administrator-prompt install on a background thread so the prompt never blocks the UI.
+    func installWithAdministratorPromptAsync() async throws {
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/\(InstallScript.label)").path
+        guard FileManager.default.isExecutableFile(atPath: helper),
+              let helperHash = Self.cdhash(of: URL(fileURLWithPath: helper)),
+              let appHash = Self.cdhash(of: Bundle.main.bundleURL) else { throw HelperInstallError.missingHelper }
+        let requirement = "identifier \"io.github.kkjjkamal23.Ultstat\" and cdhash H\"\(appHash)\""
+        let shell = InstallScript.installShell(sourceHelper: helper, expectedCDHash: helperHash,
+                                               clientRequirement: requirement, plist: try InstallScript.launchdPlist())
+        connection?.invalidate()
+        connection = nil
+        try await Task.detached(priority: .userInitiated) { try Self.runAsAdministrator(shell) }.value
     }
 
     static func cdhash(of url: URL) -> String? {
@@ -86,7 +87,8 @@ final class HelperClient {
         connection?.invalidate()
         connection = nil
         if isLegacyInstalled {
-            try Self.runAsAdministrator(InstallScript.uninstallShell)
+            let shell = InstallScript.uninstallShell
+            try await Task.detached(priority: .userInitiated) { try Self.runAsAdministrator(shell) }.value
         } else {
             try await service.unregister()
         }
@@ -94,7 +96,7 @@ final class HelperClient {
 
     // MARK: Administrator prompt
 
-    private static func runAsAdministrator(_ shell: String) throws {
+    nonisolated private static func runAsAdministrator(_ shell: String) throws {
         let source = InstallScript.appleScript(shell: shell, prompt: "Ultstat needs to install its charge helper.")
         var error: NSDictionary?
         guard let script = NSAppleScript(source: source) else { throw HelperInstallError.scriptFailed("could not build script") }

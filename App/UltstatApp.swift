@@ -22,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         model = AppModel()
         NSApp.mainMenu = makeMainMenu()
-        model.statusItem = StatusItemController(model: model)
+        model.reconcileStatusItems()
         model.openSettingsAction = { [weak self] in self?.settingsWindow.show() }
         SnapshotExporter.scheduleIfRequested(model: model)
         // UI-test entry points: the status item may be hidden by a menu-bar manager.

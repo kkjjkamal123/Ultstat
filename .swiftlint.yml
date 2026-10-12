@@ -28,6 +28,9 @@ opt_in_rules:
   - redundant_nil_coalescing
   - sorted_first_last
   - weak_delegate
+function_parameter_count:
+  warning: 7
+  error: 8
 line_length:
   warning: 160
   error: 200

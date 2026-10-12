@@ -22,7 +22,7 @@ final class MonitorHub {
     let fans: FanSampler?
     private(set) var accessories: AccessorySampler
     private let bus: ReadingsBus
-    private let power: PowerSampler?
+    let power: PowerSampler?
     private let smc: SMC?
 
     private var menuTokens: [MenuBarItem: [DemandToken]] = [:]
@@ -150,9 +150,16 @@ final class MonitorHub {
 }
 
 /// Total system power from the SMC (`PSTR`, watts). One coprocessor read per sample.
-final class PowerSampler: Sampler {
+final class PowerSampler: Sampler, @unchecked Sendable {
     let cadence = 2
     private let smc: SMC
+    private let lock = NSLock()
+    private var _history = RingBuffer(capacity: 180)
+    var history: RingBuffer {
+        lock.lock()
+        defer { lock.unlock() }
+        return _history
+    }
     private let onUpdate: @Sendable (Double) -> Void
     private let key: SMCKey
 
@@ -164,6 +171,10 @@ final class PowerSampler: Sampler {
     }
 
     func sample(tick: UInt64) {
-        if let w = smc.double(key), w.isFinite, w >= 0 { onUpdate(w) }
+        guard let w = smc.double(key), w.isFinite, w >= 0 else { return }
+        lock.lock()
+        _history.append(Float(w))
+        lock.unlock()
+        onUpdate(w)
     }
 }

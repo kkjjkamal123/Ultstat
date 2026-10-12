@@ -16,6 +16,8 @@ public struct AdapterInfo: Sendable, Equatable {
     public var voltage: Int?   // mV
     public var current: Int?   // mA
     public var isWireless: Bool
+    public var manufacturer: String?
+    public var serial: String?
 }
 
 public struct BatterySnapshot: Sendable, Equatable {
@@ -186,7 +188,9 @@ public final class BatteryMonitor: Sampler, @unchecked Sendable {
                 watts: (a["Watts"] as? NSNumber)?.intValue,
                 voltage: (a["AdapterVoltage"] as? NSNumber)?.intValue,
                 current: (a["Current"] as? NSNumber)?.intValue,
-                isWireless: (a["IsWireless"] as? NSNumber)?.boolValue ?? false
+                isWireless: (a["IsWireless"] as? NSNumber)?.boolValue ?? false,
+                manufacturer: a["Manufacturer"] as? String,
+                serial: a["SerialString"] as? String
             )
         }
 
