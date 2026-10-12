@@ -196,3 +196,24 @@ final class FakeFloatSMC: SMCAccess, @unchecked Sendable {
         #expect(smc.values["CHTE"] == [0, 0, 0, 0] && smc.values["CHIE"] == [0])
     }
 }
+
+@Suite struct NativeOriginalsPersistenceTests {
+    /// A helper restart must restore the user's originals, not Ultstat's own values.
+    @Test func originalsSurviveRestart() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("orig-\(UUID().uuidString).plist")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let smc = FakeSMC(["CHIE": [0]])
+        let prefs = FakePrefs()
+        prefs.store = ["enabled": true]   // user's real setting: OBC on, no MCL
+        let first = NativeLimitActuator(smc: smc, prefs: prefs, originalsURL: url)
+        try first.apply(ChargeOutputs(allowCharging: false, discharge: false), mode: .holding, policy: ChargePolicy(limit: 80), percent: 80)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        // Helper killed and relaunched: prefs now hold Ultstat's values.
+        let second = NativeLimitActuator(smc: smc, prefs: prefs, originalsURL: url)
+        try second.apply(ChargeOutputs(allowCharging: false, discharge: false), mode: .holding, policy: ChargePolicy(limit: 75), percent: 75)
+        try second.restoreStock()
+        #expect(prefs.store["enabled"] as? Bool == true, "user's original OBC setting restored")
+        #expect(prefs.store["mclLimitValue"] == nil && prefs.store["MCLFeatureState"] == nil)
+        #expect(!FileManager.default.fileExists(atPath: url.path), "file removed after a successful restore")
+    }
+}

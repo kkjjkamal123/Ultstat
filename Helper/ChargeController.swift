@@ -33,7 +33,9 @@ final class ChargeController: @unchecked Sendable {
     init() {
         let smc = try? SMC()
         self.smc = smc
-        actuator = smc.flatMap { makeChargeActuator(smc: $0) }
+        actuator = smc.flatMap {
+            makeChargeActuator(smc: $0, originalsURL: Self.policyURL.deletingLastPathComponent().appendingPathComponent("native-originals.plist"))
+        }
         policy = Self.loadPolicy()
         batteryTempKeys = ["TB0T", "TB1T", "TB2T"].map { SMCKey($0) }.filter { smc?.info($0) != nil }
         log.info("mechanism=\(self.actuator?.mechanism.rawValue ?? "unsupported", privacy: .public) policy.limit=\(self.policy.limit)")

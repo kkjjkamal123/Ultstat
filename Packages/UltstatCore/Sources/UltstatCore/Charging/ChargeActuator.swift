@@ -146,12 +146,33 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
     private let prefs: any SystemPreferences
     private let lock = NSLock()
     private var appliedTarget: Int?
-    /// Values present before Ultstat first touched the domain, for `restoreStock()`.
+    /// Values present before Ultstat first touched the domain, for `restoreStock()`. Persisted so a
+    /// helper restart (crash, SIGKILL) never mistakes Ultstat's own values for the user's originals.
     private var originals: [String: Any?]?
+    private let originalsURL: URL?
 
-    public init(smc: any SMCAccess, prefs: any SystemPreferences) {
+    public init(smc: any SMCAccess, prefs: any SystemPreferences, originalsURL: URL? = nil) {
         cache = SMCWriteCache(smc: smc)
         self.prefs = prefs
+        self.originalsURL = originalsURL
+        if let url = originalsURL, let data = try? Data(contentsOf: url),
+           let saved = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
+            // Keys absent from the file were absent originally.
+            originals = Dictionary(uniqueKeysWithValues: Self.managedKeys.map { ($0, saved[$0]) })
+        }
+    }
+
+    private func persistOriginals() {
+        guard let url = originalsURL else { return }
+        guard let originals else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
+        let present = originals.compactMapValues { $0 }
+        if let data = try? PropertyListSerialization.data(fromPropertyList: present, format: .binary, options: 0) {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? data.write(to: url, options: .atomic)
+        }
     }
 
     /// Native-limit target for a given state. macOS holds the battery at this value by itself.
@@ -198,6 +219,7 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
         for key in Self.managedKeys { prefs.set(key, originals[key].flatMap { $0 }, domain: Self.domain) }
         try commit()
         self.originals = nil
+        persistOriginals()   // deletes the file only after a successful restore
         appliedTarget = nil
     }
 
@@ -207,6 +229,7 @@ public final class NativeLimitActuator: ChargeActuator, @unchecked Sendable {
         guard target != appliedTarget else { return }
         if originals == nil {
             originals = Dictionary(uniqueKeysWithValues: Self.managedKeys.map { ($0, prefs.value($0, domain: Self.domain)) })
+            persistOriginals()
         }
         if let target {
             prefs.set("enabled", false, domain: Self.domain)          // Optimized Battery Charging off
@@ -250,11 +273,12 @@ public struct CFSystemPreferences: SystemPreferences {
     }
 }
 
-public func makeChargeActuator(smc: any SMCAccess, prefs: any SystemPreferences = CFSystemPreferences()) -> (any ChargeActuator)? {
+public func makeChargeActuator(smc: any SMCAccess, prefs: any SystemPreferences = CFSystemPreferences(),
+                               originalsURL: URL? = nil) -> (any ChargeActuator)? {
     switch detectChargeMechanism(smc: smc) {
     case .smcTahoe: TahoeSMCActuator(smc: smc)
     case .smcLegacy: LegacySMCActuator(smc: smc)
-    case .nativeLimit: NativeLimitActuator(smc: smc, prefs: prefs)
+    case .nativeLimit: NativeLimitActuator(smc: smc, prefs: prefs, originalsURL: originalsURL)
     case .unsupported: nil
     }
 }
