@@ -50,6 +50,14 @@ final class HelperClient {
         try Self.runAsAdministrator(InstallScript.installShell(plist: plist))
     }
 
+    /// Replaces the registered daemon with the one in this app bundle.
+    func reregister() async throws {
+        connection?.invalidate()
+        connection = nil
+        try await service.unregister()
+        try service.register()
+    }
+
     func uninstall() async throws {
         _ = await restoreDefaults()
         connection?.invalidate()

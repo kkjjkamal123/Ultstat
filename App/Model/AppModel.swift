@@ -30,6 +30,25 @@ final class AppModel {
         applySettings()
         helperState = helper.state
         observeSettings()
+        Task { await upgradeHelperIfNeeded() }
+    }
+
+    /// A newer app may ship a changed helper; replace an installed older one once at launch.
+    private func upgradeHelperIfNeeded() async {
+        guard helper.state == .running else { return }
+        let installed = await helper.version()
+        guard let installed, installed != ultstatHelperVersion else { return }
+        do {
+            if helper.isLegacyInstalled {
+                try helper.installWithAdministratorPrompt()
+            } else {
+                try await helper.reregister()
+            }
+        } catch {
+            helperError = "Helper update failed: \(error.localizedDescription)"
+        }
+        await refreshHelper()
+        if settings.stored.chargeControlEnabled { pushPolicy() }
     }
 
     @ObservationIgnored private var alertEngine = AlertEngine()

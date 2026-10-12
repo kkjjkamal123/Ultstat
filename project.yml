@@ -59,6 +59,8 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Ultstat
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.utilities
         NSHumanReadableCopyright: "Copyright © 2026 kkjjkamal23. Apache License 2.0."
